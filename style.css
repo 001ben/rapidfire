@@ -1,0 +1,39 @@
+/* Custom styles for a better look and feel */
+body {
+    font-family: 'Inter', sans-serif;
+    overscroll-behavior: none;
+}
+/* Style for the Ace Editor to ensure it fits its container */
+.ace_editor {
+    width: 100%;
+    height: 100%;
+}
+/* Custom scrollbar for a polished look */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+}
+/* Make table header sticky for easy viewing of large datasets */
+#data-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+/* Styles for the plot container */
+#plot-container svg {
+    background-color: #ffffff;
+    font-family: 'Inter', sans-serif;
+    border-radius: 0.5rem;
+    width: 100%;
+    height: auto;
+}

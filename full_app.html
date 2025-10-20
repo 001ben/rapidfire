@@ -5,65 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interactive Arquero Editor</title>
 
-    <!-- Load Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- Load Arquero and Ace Code Editor -->
     <script src="https://cdn.jsdelivr.net/npm/arquero@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.33.0/ace.js"></script>
     
-    <!-- Load D3 and Observable Plot for visualizations -->
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
     <script src="https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6"></script>
 
-    <style>
-        /* Custom styles for a better look and feel */
-        body {
-            font-family: 'Inter', sans-serif;
-            overscroll-behavior: none;
-        }
-        /* Style for the Ace Editor to ensure it fits its container */
-        .ace_editor {
-            width: 100%;
-            height: 100%;
-        }
-        /* Custom scrollbar for a polished look */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #f1f5f9;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #94a3b8;
-            border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #64748b;
-        }
-        /* Make table header sticky for easy viewing of large datasets */
-        #data-table thead {
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-        /* Styles for the plot container */
-        #plot-container svg {
-            background-color: #ffffff;
-            font-family: 'Inter', sans-serif;
-            border-radius: 0.5rem;
-            width: 100%;
-            height: auto;
-        }
-    </style>
-     <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="style.css">
+    
+    <script src="app.js" defer></script>
 </head>
 <body class="bg-slate-100 text-slate-800 flex flex-col h-screen p-4 md:p-6 lg:p-8 box-border">
 
-    <!-- Header Section -->
     <header class="mb-4 flex-shrink-0">
         <h1 class="text-3xl font-bold text-slate-900 flex items-center">
             Interactive Arquero Editor
@@ -79,12 +38,9 @@
         </p>
     </header>
 
-    <!-- Main Content Area -->
     <main class="flex-grow flex flex-col min-h-0">
         
-        <!-- DATA VIEW -->
         <div id="data-view" class="flex-grow flex flex-col min-h-0">
-            <!-- Code Editor Container -->
             <div id="editor-container" class="relative flex-shrink-0 h-56 md:h-64 rounded-lg shadow-md overflow-hidden border border-slate-300">
                 <div id="editor"></div>
                 <button id="copy-button" class="absolute top-2.5 right-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-sans text-xs font-semibold py-1.5 px-3 rounded-md transition-colors flex items-center z-20" title="Copy code to clipboard">
@@ -93,9 +49,7 @@
                     <span id="copy-text" class="ml-1.5">Copy</span>
                 </button>
             </div>
-            <!-- Error Display Area -->
             <div id="error-container" class="font-mono text-red-700 bg-red-100 p-3 my-4 rounded-md whitespace-pre-wrap hidden flex-shrink-0"></div>
-            <!-- Table Display Container -->
             <div id="table-container" class="flex-grow min-h-0 overflow-auto rounded-lg shadow-md border border-slate-300 bg-white mt-4">
                 <table id="data-table" class="min-w-full text-sm">
                     <thead class="bg-slate-200 text-slate-700"></thead>
@@ -104,7 +58,6 @@
             </div>
         </div>
 
-        <!-- PLOT VIEW (hidden by default) -->
         <div id="plot-view" class="hidden flex-grow flex flex-col min-h-0">
             <div class="flex-shrink-0 mb-4 flex justify-between items-center">
                 <h2 class="text-2xl font-bold text-slate-900">Plot View</h2>
@@ -112,396 +65,19 @@
                     &larr; Back to Data
                 </button>
             </div>
-            <!-- Plot Controls (for histogram) -->
             <div id="plot-controls" class="hidden flex-shrink-0 mb-4 items-center gap-3 p-3 bg-slate-200 rounded-lg">
                 <label for="threshold-slider" class="font-semibold text-slate-700">Bin Count:</label>
                 <input type="range" id="threshold-slider" min="5" max="50" value="20" class="w-64 flex-grow">
                 <span id="threshold-value" class="font-mono font-semibold text-slate-800 bg-white px-2 py-1 rounded w-12 text-center">20</span>
             </div>
-            <!-- Plot Code Editor -->
             <div id="plot-code-container" class="relative flex-shrink-0 h-48 md:h-56 rounded-lg shadow-md overflow-hidden border border-slate-300">
                 <div id="plot-code-editor"></div>
             </div>
-             <!-- Plotting Area -->
-            <div id="plot-container" class="mt-4 rounded-lg shadow-md border border-slate-300 bg-white p-2 flex-grow min-h-0 overflow-auto">
-                <!-- Plot will be generated by JavaScript here -->
-            </div>
+             <div id="plot-container" class="mt-4 rounded-lg shadow-md border border-slate-300 bg-white p-2 flex-grow min-h-0 overflow-auto">
+                </div>
         </div>
     </main>
-
-    <script>
-        // --- GLOBAL VARIABLES ---
-        let editor, plotCodeEditor;
-        let baseTable, currentTable;
-        let selectedColumns = new Set();
-        let currentPlotInfo = {}; // To store info for interactive plots
-        const dataView = document.getElementById('data-view');
-        const plotView = document.getElementById('plot-view');
-        const dataTableEl = document.getElementById('data-table');
-        const errorContainerEl = document.getElementById('error-container');
-        const plotContainerEl = document.getElementById('plot-container');
-        const plotControlsEl = document.getElementById('plot-controls');
-        const thresholdSlider = document.getElementById('threshold-slider');
-        const thresholdValueEl = document.getElementById('threshold-value');
-        const PENGUINS_URL = 'https://gist.githubusercontent.com/slopp/ce3b90b9168f2f921784de84fa445651/raw/4ecf3041f0ed4913e7c230758733948bc561f434/penguins.csv';
-        const MAX_PREVIEW_ROWS = 100;
-
-        // --- 1. INITIALIZATION ---
-        async function initialize() {
-            // Configure the Main Arquero Editor
-            editor = ace.edit("editor");
-            editor.setTheme("ace/theme/tomorrow");
-            editor.session.setMode("ace/mode/javascript");
-            editor.setFontSize(14);
-            editor.session.setOptions({ useWorker: false });
-
-            // Configure the Editable Plot Code Editor
-            plotCodeEditor = ace.edit("plot-code-editor");
-            plotCodeEditor.setTheme("ace/theme/tomorrow");
-            plotCodeEditor.session.setMode("ace/mode/javascript");
-            plotCodeEditor.setFontSize(14);
-            plotCodeEditor.setReadOnly(false);
-            plotCodeEditor.session.setOptions({ useWorker: false });
-
-            // Load initial data
-            try {
-                baseTable = await aq.loadCSV(PENGUINS_URL, { autoType: true });
-                const initialCode = `table
-  // .filter(d => d.bill_length_mm > 40)
-  // .groupby('species', 'island')
-  // .rollup({ 
-  //   avg_bill_length: aq.op.average('bill_length_mm'),
-  //   avg_body_mass: aq.op.average('body_mass_g') 
-  // })
-  // .orderby(aq.desc('avg_body_mass'))`;
-                editor.setValue(initialCode, 1);
-                editor.session.on('change', updateTable);
-                updateTable();
-            } catch (err) {
-                showError(`Failed to load initial data: ${err.message}`);
-            }
-
-            // Setup UI Listeners
-            setupCopyButton();
-            document.getElementById('back-to-data-button').addEventListener('click', showDataView);
-            document.addEventListener('keydown', handleKeydown);
-            thresholdSlider.addEventListener('input', () => renderHistogram());
-            plotCodeEditor.session.on('change', updatePlot);
-        }
-        
-        function setupCopyButton() {
-            const copyButton = document.getElementById('copy-button');
-            const copyText = document.getElementById('copy-text');
-            const copyIcon = document.getElementById('copy-icon');
-            const checkIcon = document.getElementById('check-icon');
-
-            copyButton.addEventListener('click', () => {
-                const code = editor.getValue();
-                navigator.clipboard.writeText(code).then(() => {
-                    copyText.textContent = 'Copied!';
-                    copyIcon.classList.add('hidden');
-                    checkIcon.classList.remove('hidden');
-                    copyButton.classList.replace('bg-slate-200', 'bg-green-200');
-                    copyButton.classList.replace('hover:bg-slate-300', 'hover:bg-green-300');
-
-                    setTimeout(() => {
-                        copyText.textContent = 'Copy';
-                        copyIcon.classList.remove('hidden');
-                        checkIcon.classList.add('hidden');
-                        copyButton.classList.replace('bg-green-200', 'bg-slate-200');
-                        copyButton.classList.replace('hover:bg-green-300', 'hover:bg-slate-300');
-                    }, 2000);
-                });
-            });
-        }
-        
-        // --- 2. CORE REACTIVE LOOP ---
-        function updateTable() {
-            const code = editor.getValue();
-            if (!baseTable) return;
-
-            try {
-                // This creates a new function that takes 'table' and 'aq' as arguments
-                // and returns the result of the user's code.
-                const transform = new Function('table', 'aq', `return ${code};`);
-                
-                // Run the user's code against the base table
-                currentTable = transform(baseTable, aq);
-
-                hideError();
-                renderTable(currentTable);
-            } catch (err) {
-                showError(err.message);
-                currentTable = null; // Invalidate current table on error
-            }
-        }
-
-        // --- 3. TABLE RENDERING ---
-        function renderTable(aqTable) {
-            const thead = dataTableEl.querySelector('thead');
-            const tbody = dataTableEl.querySelector('tbody');
-
-            thead.innerHTML = '';
-            tbody.innerHTML = '';
-
-            if (!aqTable || typeof aqTable.columnNames !== 'function') {
-                return;
-            }
-
-            const columnNames = aqTable.columnNames();
-            const totalRows = aqTable.numRows();
-            const rows = aqTable.slice(0, MAX_PREVIEW_ROWS).objects();
-
-            // Create Header Row
-            const headerRow = document.createElement('tr');
-            columnNames.forEach(name => {
-                const th = document.createElement('th');
-                th.textContent = name;
-                th.className = 'p-3 text-left font-semibold tracking-wider cursor-pointer transition-colors hover:bg-slate-300';
-                th.addEventListener('click', () => toggleColumnSelection(name));
-                headerRow.appendChild(th);
-            });
-            thead.appendChild(headerRow);
-            updateHeaderHighlights(); // Ensure highlights are correct on re-render
-
-            // Create Body Rows
-            rows.forEach(row => {
-                const tr = document.createElement('tr');
-                tr.className = 'hover:bg-slate-50';
-                columnNames.forEach(name => {
-                    const td = document.createElement('td');
-                    const value = row[name];
-                    td.textContent = value;
-                    td.className = 'p-3 whitespace-nowrap cursor-pointer';
-                    td.addEventListener('click', () => addFilter(name, value));
-                    tr.appendChild(td);
-                });
-                tbody.appendChild(tr);
-            });
-
-            if (totalRows > MAX_PREVIEW_ROWS) {
-                const infoRow = document.createElement('tr');
-                const infoCell = document.createElement('td');
-                infoCell.colSpan = columnNames.length;
-                infoCell.textContent = `Showing ${MAX_PREVIEW_ROWS} of ${totalRows} rows...`;
-                infoCell.className = 'p-3 text-center text-slate-500 italic bg-slate-50';
-                tbody.appendChild(infoRow);
-            }
-        }
-
-        // --- 4. VIEW MANAGEMENT ---
-        function showDataView() {
-            dataView.classList.remove('hidden');
-            plotView.classList.add('hidden');
-            selectedColumns.clear();
-            updateHeaderHighlights();
-        }
-
-        function showPlotView() {
-            dataView.classList.add('hidden');
-            plotView.classList.remove('hidden');
-            // Force Ace editor in plot view to resize
-            setTimeout(() => plotCodeEditor.resize(), 0);
-        }
-
-        // --- 5. INTERACTIVE HOTKEYS & ACTIONS ---
-        function toggleColumnSelection(columnName) {
-            if (selectedColumns.has(columnName)) {
-                selectedColumns.delete(columnName);
-            } else {
-                selectedColumns.add(columnName);
-            }
-            updateHeaderHighlights();
-        }
-        
-        function updateHeaderHighlights() {
-            const headers = dataTableEl.querySelectorAll('thead th');
-            headers.forEach(th => {
-                const columnName = th.textContent;
-                if (selectedColumns.has(columnName)) {
-                    th.classList.add('bg-sky-300', 'text-sky-800');
-                    th.classList.remove('hover:bg-slate-300');
-                } else {
-                    th.classList.remove('bg-sky-300', 'text-sky-800');
-                    th.classList.add('hover:bg-slate-300');
-                }
-            });
-        }
-        
-        function handleKeydown(event) {
-            // Do not interfere if a code editor has focus
-            if (editor.isFocused() || plotCodeEditor.isFocused()) return;
-            const key = event.key.toLowerCase();
-            const isPlotViewVisible = !plotView.classList.contains('hidden');
-
-            if (isPlotViewVisible) {
-                if (key === 'p' || key === 'escape') {
-                    event.preventDefault();
-                    showDataView();
-                }
-                return; 
-            }
-
-            switch (key) {
-                case 's': event.preventDefault(); commitColumnSelection(); break;
-                case 'g': event.preventDefault(); commitGroupCount(); break;
-                case 'p': event.preventDefault(); commitPlot(); break;
-                case 'z': event.preventDefault(); editor.undo(); break;
-            }
-        }
-        
-        function commitColumnSelection() {
-            if (selectedColumns.size === 0) return;
-            const code = editor.getValue().trimEnd();
-            const columns = Array.from(selectedColumns).map(c => `'${c}'`).join(', ');
-            const newVerb = `\n  .select(${columns})`;
-            editor.setValue(code + newVerb, 1);
-            selectedColumns.clear();
-            updateHeaderHighlights();
-        }
-        
-        function commitGroupCount() {
-            if (selectedColumns.size === 0) return;
-            const code = editor.getValue().trimEnd();
-            const columns = Array.from(selectedColumns).map(c => `'${c}'`).join(', ');
-            const newVerb = `\n  .groupby(${columns})\n  .count()\n  .orderby(aq.desc('count'))`;
-            editor.setValue(code + newVerb, 1);
-            selectedColumns.clear();
-            updateHeaderHighlights();
-        }
-
-        // --- 6. PLOTTING LOGIC ---
-        let plotUpdateTimeout;
-        function updatePlot() {
-            clearTimeout(plotUpdateTimeout);
-            plotUpdateTimeout = setTimeout(() => {
-                const plotCode = plotCodeEditor.getValue();
-                if (!plotCode || !currentTable) return;
-                
-                try {
-                    const data = currentTable.objects({ limit: Infinity });
-                    // The plot code is an expression that needs 'data' and 'Plot' in its scope
-                    const plot = eval(plotCode);
-
-                    plotContainerEl.innerHTML = ''; // Clear previous plot
-                    plotContainerEl.appendChild(plot);
-                    hideError(); // Clear previous errors
-                } catch (err) {
-                    showError(`Plotting Error: ${err.message}`);
-                }
-            }, 300); // Debounce for 300ms
-        }
-
-        function getColumnType(columnName) {
-            if (!currentTable.column(columnName)) return 'categorical'; // Failsafe
-            const firstValue = currentTable.column(columnName).find(v => v != null);
-            return typeof firstValue === 'string' ? 'categorical' : 'quantitative';
-        }
-
-        function commitPlot() {
-            if (!currentTable || selectedColumns.size === 0 || selectedColumns.size > 2) return;
-            
-            plotControlsEl.classList.add('hidden');
-            currentPlotInfo = {};
-
-            const [col1, col2] = Array.from(selectedColumns);
-            const type1 = getColumnType(col1);
-            const type2 = col2 ? getColumnType(col2) : null;
-            let plotCode = '';
-
-            if (selectedColumns.size === 1) {
-                if (type1 === 'quantitative') {
-                    currentPlotInfo = { type: 'histogram', column: col1 };
-                    plotControlsEl.classList.remove('hidden');
-                    renderHistogram(); 
-                    showPlotView();
-                    return; 
-                } else {
-                    // For a categorical histogram (bar chart), data MUST be grouped using binX.
-                    plotCode = `Plot.plot({
-  marks: [
-    Plot.rectY(data, Plot.binX({ y: "count" }, { x: "${col1}" })),
-    Plot.ruleY([0])
-  ],
-  x: { labelAngle: -45, type: "band" },
-  marginBottom: 70, marginLeft: 50
-})`;
-                }
-            } else if (selectedColumns.size === 2) {
-                const [q1, q2] = [type1, type2].map(t => t === 'quantitative');
-                if (q1 && q2) {
-                    plotCode = `Plot.plot({
-  marks: [ Plot.dot(data, { x: "${col1}", y: "${col2}" }) ],
-  grid: true, marginLeft: 50
-})`;
-                } else if (!q1 && q2) {
-                    plotCode = `Plot.plot({
-  marks: [ Plot.barY(data, { x: "${col1}", y: "${col2}", sort: {x: "y", reverse: true} }) ],
-  x: { labelAngle: -45 }, marginBottom: 70, marginLeft: 50
-})`;
-                } else if (q1 && !q2) {
-                    plotCode = `Plot.plot({
-  marks: [ Plot.barY(data, { x: "${col2}", y: "${col1}", sort: {x: "y", reverse: true} }) ],
-  x: { labelAngle: -45 }, marginBottom: 70, marginLeft: 50
-})`;
-                } else {
-                    plotCode = `Plot.plot({
-  marks: [ Plot.dot(data, Plot.group({ fill: "count" }, { x: "${col1}", y: "${col2}" })) ],
-  color: { scheme: "viridis" },
-  x: { labelAngle: -45 }, marginBottom: 70, marginLeft: 70
-})`;
-                }
-            }
-
-            if (!plotCode) return;
-            renderStaticPlot(plotCode);
-        }
-
-        function renderStaticPlot(plotCode) {
-            // Set the code in the editor. The editor's 'change' listener will call updatePlot.
-            plotCodeEditor.setValue(plotCode, -1);
-            showPlotView();
-        }
-
-        function renderHistogram() {
-            if (currentPlotInfo.type !== 'histogram') return;
-
-            const binCount = thresholdSlider.value;
-            const colName = currentPlotInfo.column;
-            thresholdValueEl.textContent = binCount;
-
-            const plotCode = `Plot.plot({
-  marks: [
-    Plot.rectY(data, Plot.binX({ y: "count" }, { x: "${colName}", thresholds: ${binCount} })),
-    Plot.ruleY([0])
-  ],
-  marginLeft: 50
-})`;
-            
-            // This will trigger the 'change' event on the editor, which then calls updatePlot.
-            plotCodeEditor.setValue(plotCode, 1);
-        }
-
-        // --- 7. INTERACTIVITY & UTILITIES ---
-        function addFilter(columnName, value) {
-            const valueString = JSON.stringify(value);
-            const newVerb = `\n  .filter(d => d['${columnName}'] === ${valueString})`;
-            const currentCode = editor.getValue();
-            editor.setValue(currentCode + newVerb, 1);
-        }
-
-        function showError(message) {
-            errorContainerEl.textContent = message;
-            errorContainerEl.classList.remove('hidden');
-        }
-
-        function hideError() {
-            errorContainerEl.classList.add('hidden');
-        }
-
-        // --- 8. START THE APP ---
-        document.addEventListener('DOMContentLoaded', initialize);
-    </script>
+    <div id="context-menu" class="hidden absolute z-50 bg-white border border-slate-300 rounded-md shadow-lg py-1 min-w-[180px]">
+    </div>
 </body>
 </html>
-
