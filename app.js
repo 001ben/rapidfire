@@ -245,6 +245,24 @@ const DataView = {
             action: () => DataView.commitSort(columnName, 'desc')
         });
 
+        // Context: No other columns selected and column is categorical/string -> provide cast/derive helpers
+        // We only show these when nothing else is selected to match the user's request.
+        if (app.selectedColumns.size === 0 && colType === 'categorical') {
+            items.push({ type: 'divider' });
+            const casts = [
+                { label: 'Cast to Integer', type: 'int' },
+                { label: 'Cast to Float', type: 'float' },
+                { label: 'Cast to Date', type: 'date' },
+                { label: 'Cast to Boolean', type: 'bool' }
+            ];
+            casts.forEach(c => {
+                items.push({
+                    label: c.label,
+                    action: () => DataView.commitDeriveCast(columnName, c.type)
+                });
+            });
+        }
+
         // Show the menu
         AppController.showContextMenu(event, items);
     },
@@ -262,6 +280,59 @@ const DataView = {
         this.editor.setValue(code + newVerb, 1);
         app.selectedColumns.clear();
         this.updateHeaderHighlights();
+    },
+
+    // Insert or extend a .derive({...}) block to cast a string column to another type.
+    commitDeriveCast(columnName, castType) {
+        const code = this.editor.getValue();
+        const result = this.getDeriveInsertText(columnName, castType, code);
+        this.editor.setValue(result, 1);
+    },
+
+    // Build the snippet to insert. It will try to append to an existing .derive({...})
+    // by adding a new property, otherwise it will create a new .derive({ ... }) block.
+    getDeriveInsertText(columnName, castType, currentCode) {
+        // Map castType to JS expression for arquero derive
+        const exprMap = {
+            // Use Arquero op functions with correct names (underscore style)
+            // parse_int: supply radix 10 to ensure decimal parsing
+            int: `aq.op.parse_int(d['${columnName}'], 10)`,
+            float: `aq.op.parse_float(d['${columnName}'])`,
+            date: `aq.op.parse_date(d['${columnName}'])`,
+            bool: `(function(v){ if (v === null || v === undefined || v === '') return null; const s = String(v).toLowerCase(); if (s === 'true' || s === '1' || s === 't' || s === 'yes') return true; if (s === 'false' || s === '0' || s === 'f' || s === 'no') return false; return null; })(d['${columnName}'])`
+        };
+
+        const rhs = exprMap[castType] || exprMap['float'];
+        const newColName = `${columnName}`;
+
+        // Try to detect an existing .derive( at the end of the code. We look for the last occurrence.
+        const deriveIndex = currentCode.lastIndexOf('.derive(');
+        if (deriveIndex === -1) {
+            // No existing derive block: create one that overrides the original column
+            return currentCode + `\n  .derive({ '${newColName}': d => ${rhs} })`;
+        }
+
+        // If there's an existing derive, attempt to insert a new property before the closing })
+        const afterDerive = currentCode.slice(deriveIndex);
+        const closingObjIndex = afterDerive.indexOf('})');
+        if (closingObjIndex !== -1) {
+            // We found an existing derive block with closing })
+            const insertPos = deriveIndex + closingObjIndex; // position in original string
+            
+            // Check if current object already has entries (naive check)
+            const objContent = afterDerive.slice(afterDerive.indexOf('(') + 1, closingObjIndex);
+            const needsComma = /\S/.test(objContent);
+            const prefix = needsComma ? ', ' : ' ';
+            
+            // Insert the new property before the closing })
+            const newProperty = `${prefix}'${newColName}': d => ${rhs}`;
+            
+            // Build the modified code by inserting the new property before the closing })
+            return currentCode.slice(0, insertPos) + newProperty + currentCode.slice(insertPos);
+        }
+
+        // Fallback: append a new derive that overrides the original column
+        return currentCode + `\n  .derive({ '${newColName}': d => ${rhs} })`;
     },
 
     commitSort(columnName, direction) {
@@ -316,8 +387,13 @@ const PlotView = {
 
         try {
             const data = app.currentTable.objects({ limit: Infinity });
-            // The plot code is an expression that needs 'data' and 'Plot' in its scope
-            const plot = eval(plotCode); 
+            // Get container dimensions for responsive plotting
+            const container = app.elements.plotContainer;
+            const width = container.clientWidth - 80; // Account for padding
+            const height = Math.min(container.clientHeight - 80, 1200); // Max height 1200px
+            
+            // The plot code is an expression that needs 'data', 'Plot', 'width', and 'height' in its scope
+            const plot = eval(plotCode);
 
             app.elements.plotContainer.innerHTML = ''; // Clear previous plot
             app.elements.plotContainer.appendChild(plot);
@@ -366,14 +442,16 @@ const PlotView = {
                 this.show();
                 return;
             } else {
-                // Categorical (Bar Chart)
+                // Categorical (Horizontal Bar Chart)
                 plotCode = `Plot.plot({
   marks: [
-    Plot.rectY(data, Plot.binX({ y: "count" }, { x: "${col1}" })),
-    Plot.ruleY([0])
+    Plot.rectX(data, Plot.groupY({ x: "count" }, { y: "${col1}", sort: {y: "x", reverse: true}, fill: "steelblue" })),
+    Plot.ruleX([0])
   ],
-  x: { labelAngle: -45, type: "band" },
-  marginBottom: 70, marginLeft: 50
+  y: { type: "band", label: "${col1}" },
+  x: { label: "Count", grid: true },
+  marginBottom: 50, marginLeft: 100,
+  width: width, height: height
 })`;
             }
         } else if (app.selectedColumns.size === 2) {
@@ -382,26 +460,30 @@ const PlotView = {
                 // Quant vs Quant (Scatter)
                 plotCode = `Plot.plot({
   marks: [ Plot.dot(data, { x: "${col1}", y: "${col2}" }) ],
-  grid: true, marginLeft: 50
+  grid: true, marginLeft: 50,
+  width: width, height: height
 })`;
             } else if (!q1 && q2) {
                 // Cat vs Quant (Bar)
                 plotCode = `Plot.plot({
   marks: [ Plot.barY(data, { x: "${col1}", y: "${col2}", sort: {x: "y", reverse: true} }) ],
-  x: { labelAngle: -45 }, marginBottom: 70, marginLeft: 50
+  x: { labelAngle: -45 }, marginBottom: 70, marginLeft: 50,
+  width: width, height: height
 })`;
             } else if (q1 && !q2) {
                 // Quant vs Cat (Bar)
                 plotCode = `Plot.plot({
   marks: [ Plot.barY(data, { x: "${col2}", y: "${col1}", sort: {x: "y", reverse: true} }) ],
-  x: { labelAngle: -45 }, marginBottom: 70, marginLeft: 50
+  x: { labelAngle: -45 }, marginBottom: 70, marginLeft: 50,
+  width: width, height: height
 })`;
             } else {
                 // Cat vs Cat (Heatmap)
                 plotCode = `Plot.plot({
   marks: [ Plot.dot(data, Plot.group({ fill: "count" }, { x: "${col1}", y: "${col2}" })) ],
   color: { scheme: "viridis" },
-  x: { labelAngle: -45 }, marginBottom: 70, marginLeft: 70
+  x: { labelAngle: -45 }, marginBottom: 70, marginLeft: 70,
+  width: width, height: height
 })`;
             }
         }
@@ -428,7 +510,8 @@ const PlotView = {
     Plot.rectY(data, Plot.binX({ y: "count" }, { x: "${colName}", thresholds: ${binCount} })),
     Plot.ruleY([0])
   ],
-  marginLeft: 50
+  marginLeft: 50,
+  width: width, height: height
 })`;
         
         // This will trigger the 'change' event on the editor, which then calls handleUpdate.
