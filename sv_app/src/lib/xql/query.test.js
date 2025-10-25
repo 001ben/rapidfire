@@ -329,4 +329,160 @@ test("multiple joins", () => {
     `);
 });
 
+test("double group by", () => {
+    const q = XQL.from('penguins')
+        .group_by("species")
+        .agg(F.count('*').alias('count'))
+        .order_by(F.col('count').desc())
+        .group_by("count")
+        .agg(F.count('*').alias('count'))
+        .order_by(F.col('count').desc());
+
+    assertEquals(q.toSQL(), `
+        SELECT
+          count,
+          COUNT(*) AS count
+        FROM
+          (
+            SELECT
+              species,
+              COUNT(*) AS count
+            FROM
+              penguins
+            GROUP BY
+              species
+          ) AS t0
+        GROUP BY
+          count
+        ORDER BY
+          count DESC
+    `);
+
+    assertEquals(q.toString(), `
+        const t0 = XQL.from("penguins")
+          .group_by(F.col("species"))
+          .agg(F.count(F.col("*")).alias("count"))
+          .order_by(F.col("count").desc());
+        XQL.from(t0)
+          .group_by(F.col("count"))
+          .agg(F.count(F.col("*")).alias("count"))
+          .order_by(F.col("count").desc())
+    `);
+});
+
+test("triple chained group_by", () => {
+    const q = XQL.from("penguins")
+        .group_by("island", "bill_length_mm", "bill_depth_mm", "flipper_length_mm", "body_mass_g")
+        .agg(F.count('*').alias('count'))
+        .order_by(F.col('count').desc())
+        .group_by("bill_length_mm")
+        .agg(F.count('*').alias('count'))
+        .order_by(F.col('count').desc())
+        .group_by("count")
+        .agg(F.count('*').alias('count_count'))
+        .order_by(F.col('count_count').desc());
+
+    assertEquals(q.toSQL(), `
+        SELECT
+          count,
+          COUNT(*) AS count_count
+        FROM
+          (
+            SELECT
+              bill_length_mm,
+              COUNT(*) AS count
+            FROM
+              (
+                SELECT
+                  island,
+                  bill_length_mm,
+                  bill_depth_mm,
+                  flipper_length_mm,
+                  body_mass_g,
+                  COUNT(*) AS count
+                FROM
+                  penguins
+                GROUP BY
+                  island,
+                  bill_length_mm,
+                  bill_depth_mm,
+                  flipper_length_mm,
+                  body_mass_g
+              ) AS t1
+            GROUP BY
+              bill_length_mm
+          ) AS t0
+        GROUP BY
+          count
+        ORDER BY
+          count_count DESC
+    `);
+
+    assertEquals(q.toString(), `const t0 = XQL.from("penguins")
+  .group_by(F.col("island"), F.col("bill_length_mm"), F.col("bill_depth_mm"), F.col("flipper_length_mm"), F.col("body_mass_g"))
+  .agg(F.count(F.col("*")).alias("count"))
+  .order_by(F.col("count").desc());
+const t0 = XQL.from(t0)
+  .group_by(F.col("bill_length_mm"))
+  .agg(F.count(F.col("*")).alias("count"))
+  .order_by(F.col("count").desc());
+XQL.from(t0)
+  .group_by(F.col("count"))
+  .agg(F.count(F.col("*")).alias("count_count"))
+  .order_by(F.col("count_count").desc())`);
+});
+
+test("select after group_by and agg", () => {
+    const q = XQL.from("penguins")
+        .group_by("species", "island", "bill_length_mm")
+        .agg(F.count('*').alias('count'))
+        .order_by(F.col('count').desc())
+        .select("species", "island");
+
+    assertEquals(q.toSQL(), `
+        SELECT
+          species,
+          island
+        FROM
+          (
+            SELECT
+              species,
+              island,
+              bill_length_mm,
+              COUNT(*) AS count
+            FROM
+              penguins
+            GROUP BY
+              species,
+              island,
+              bill_length_mm
+          ) AS t0
+    `);
+    assertEquals(q.toString(), `
+    const t0 = XQL.from("penguins")
+      .group_by(F.col("species"), F.col("island"), F.col("bill_length_mm"))
+      .agg(F.count(F.col("*")).alias("count"))
+      .order_by(F.col("count").desc());
+    XQL.from(t0)
+      .select(F.col("species"), F.col("island"))`);
+});
+
+test("plus operator for concatenation and addition", () => {
+    const q = XQL.from("my_table").select(
+        F.col("first_name").plus(" ").plus(F.col("last_name")).alias("full_name"),
+        F.col("price").plus(F.col("tax")).alias("total_price")
+    );
+    assertEquals(q.toSQL(), `
+        SELECT
+          ((first_name + ' ') + last_name) AS full_name,
+          (price + tax) AS total_price
+        FROM
+          my_table
+    `);
+    assertEquals(q.toString(), `
+        XQL.from("my_table")
+          .select(F.col("first_name").plus(F.lit(" ")).plus(F.col("last_name")).alias("full_name"), F.col("price").plus(F.col("tax")).alias("total_price"))
+    `);
+});
+
 console.log("All tests passed!");

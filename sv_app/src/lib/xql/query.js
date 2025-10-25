@@ -18,14 +18,21 @@ export class XQL {
     }
 
     select(...columns) {
-        const newQuery = this._clone();
-        const columnExpressions = columns.map(c => {
-            if (c instanceof Expression) return c;
-            if (typeof c === 'string') return col(c);
-            return lit(c);
-        });
-        newQuery._operations.push({ type: 'select', columns: columnExpressions });
-        return newQuery;
+        const hasExistingAggregation = this._operations.some(op => op.type === 'group_by' || op.type === 'agg');
+
+        if (hasExistingAggregation) {
+            const newQuery = new XQL(this);
+            return newQuery.select(...columns);
+        } else {
+            const newQuery = this._clone();
+            const columnExpressions = columns.map(c => {
+                if (c instanceof Expression) return c;
+                if (typeof c === 'string') return col(c);
+                return lit(c);
+            });
+            newQuery._operations.push({ type: 'select', columns: columnExpressions });
+            return newQuery;
+        }
     }
 
     filter(expression) {
@@ -79,8 +86,8 @@ export class XQL {
         return newQuery;
     }
 
-    toSQL() {
-        const fromClause = this._getFromClause();
+    toSQL(isSubquery = false, aliasCounter = { count: 0 }) {
+        const fromClause = this._getFromClause(aliasCounter);
         const whereClause = this._getWhereClause();
         const group_byClause = this._getgroup_byClause();
         const order_byClause = this._getorder_byClause();
@@ -92,9 +99,11 @@ export class XQL {
         if (fromClause) sql += ` ${fromClause}`;
         if (whereClause) sql += ` ${whereClause}`;
         if (group_byClause) sql += ` ${group_byClause}`;
-        if (order_byClause) sql += ` ${order_byClause}`;
-        if (limitClause) sql += ` ${limitClause}`;
-        if (offsetClause) sql += ` ${offsetClause}`;
+
+        // Only add these clauses if it's NOT a subquery
+        if (order_byClause && !isSubquery) sql += ` ${order_byClause}`;
+        if (limitClause && !isSubquery) sql += ` ${limitClause}`;
+        if (offsetClause && !isSubquery) sql += ` ${offsetClause}`;
 
         return format(sql, { language: 'duckdb' });
     }
@@ -203,10 +212,9 @@ export class XQL {
         return newQuery;
     }
 
-    _getFromClause() {
+    _getFromClause(aliasCounter) {
         if (!this._source) return '';
 
-        let aliasCounter = 0;
         const getSourceName = (source) => {
             if (typeof source === 'string') {
                 return source;
@@ -215,8 +223,8 @@ export class XQL {
                 return source._source;
             }
 
-            const alias = `t${aliasCounter++}`;
-            const subQuerySql = source.toSQL().split('\n').map(line => '  ' + line).join('\n');
+            const alias = `t${aliasCounter.count++}`;
+            const subQuerySql = source.toSQL(true, aliasCounter).split('\n').map(line => '  ' + line).join('\n');
             return `(\n${subQuerySql}\n) AS ${alias}`;
         };
 

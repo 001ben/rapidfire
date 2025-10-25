@@ -29,6 +29,10 @@ export class Expression {
         return new BinaryExpression(this, 'OR', other);
     }
 
+    plus(value) {
+        return new BinaryExpression(this, '+', value);
+    }
+
     alias(alias) {
         return new AliasExpression(this, alias);
     }
@@ -100,7 +104,8 @@ export class BinaryExpression extends Expression {
             '>=': 'gte',
             '<=': 'lte',
             'AND': 'and',
-            'OR': 'or'
+            'OR': 'or',
+            '+': 'plus'
         };
         const methodName = opMap[this._op];
         if (methodName) {
