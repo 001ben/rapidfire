@@ -5,11 +5,11 @@
     // import * as vg from "@uwdata/vgplot";
     import { onMount } from "svelte";
 
-    let vg;
+    let vgp;
     let vgLoaded = $state(false);
 
     onMount(async () => {
-      vg = await import("@uwdata/vgplot");
+      vgp = await import("@uwdata/vgplot");
       vgLoaded = true;
     });
 
@@ -21,10 +21,11 @@
 
     $effect(() => {
         if(!vgLoaded) return;
-        if (!plotContainer || !spec || plot_width === 0 || plot_height === 0) return;
+        if (!plotContainer || !spec || plot_width === 0 || plot_height === 0 || !vgp) return;
         try {
             let width = $state.snapshot(plot_width);
             let height = $state.snapshot(plot_height) - 50;
+            const vg = vgp;
             const plot = eval(spec);
             plotContainer.replaceChildren(plot);
         } catch (e) {
