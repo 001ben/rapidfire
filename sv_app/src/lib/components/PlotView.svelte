@@ -6,9 +6,11 @@
     import { onMount } from "svelte";
 
     let vg;
+    let vgLoaded = $state(false);
 
     onMount(async () => {
       vg = await import("@uwdata/vgplot");
+      vgLoaded = true;
     });
 
     let { spec = $bindable(), isDarkMode } = $props();
@@ -18,6 +20,7 @@
     let plot_height = $state(0);
 
     $effect(() => {
+        if(!vgLoaded) return;
         if (!plotContainer || !spec || plot_width === 0 || plot_height === 0) return;
         try {
             let width = $state.snapshot(plot_width);
