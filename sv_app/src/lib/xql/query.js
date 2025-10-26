@@ -1,5 +1,5 @@
 import { format } from 'sql-formatter';
-import { Column, Expression } from './expressions.js';
+import { Column, Expression, quoteIfNeeded } from './expressions.js';
 import { col, lit } from './functions.js';
 
 export class XQL {
@@ -18,9 +18,11 @@ export class XQL {
     }
 
     select(...columns) {
-        const hasExistingAggregation = this._operations.some(op => op.type === 'group_by' || op.type === 'agg');
+        const hasFinalizingOp = this._operations.some(op =>
+            ['with_columns', 'group_by', 'agg'].includes(op.type)
+        );
 
-        if (hasExistingAggregation) {
+        if (hasFinalizingOp) {
             const newQuery = new XQL(this);
             return newQuery.select(...columns);
         } else {
@@ -66,6 +68,26 @@ export class XQL {
         const columnExpressions = columns.map(c => typeof c === 'string' ? col(c) : c);
         newQuery._operations.push({ type: 'order_by', columns: columnExpressions });
         return newQuery;
+    }
+
+    with_columns(...columns) {
+        const hasFinalizingOp = this._operations.some(op =>
+            ['select', 'with_columns', 'group_by', 'agg'].includes(op.type)
+        );
+
+        if (hasFinalizingOp) {
+            const newQuery = new XQL(this);
+            return newQuery.with_columns(...columns);
+        } else {
+            const newQuery = this._clone();
+            const columnExpressions = columns.map(c => {
+                if (c instanceof Expression) return c;
+                if (typeof c === 'string') return col(c);
+                return lit(c);
+            });
+            newQuery._operations.push({ type: 'with_columns', columns: columnExpressions });
+            return newQuery;
+        }
     }
 
     join(other, on, how = 'inner') {
@@ -178,6 +200,9 @@ export class XQL {
                 case 'select':
                     jsString += `.select(${op.columns.map(c => c.toString()).join(', ')})`;
                     break;
+                case 'with_columns':
+                    jsString += `.with_columns(${op.columns.map(c => c.toString()).join(', ')})`;
+                    break;
                 case 'filter':
                     jsString += `.filter(${op.expression.toString()})`;
                     break;
@@ -246,6 +271,26 @@ export class XQL {
             const group_byCols = group_byOp ? group_byOp.columns.map(c => c.toSQL()) : [];
             const aggCols = aggOp.aggregations.map(a => a.toSQL());
             return [...group_byCols, ...aggCols].join(', ');
+        }
+
+        const withColsOp = this._operations.find(op => op.type === 'with_columns');
+        if (withColsOp) {
+            // For `with_columns`, we assume any aliased expression is either a new column
+            // or is intended to overwrite an existing one.
+            // We can partition them into columns to add and columns to replace.
+            // However, without knowing the source schema, it's hard to know if an alias
+            // is a new column or an overwrite.
+            // DuckDB's `REPLACE` is perfect for overwrites, and `SELECT *, ...` for new columns.
+            // A simple and effective strategy is to treat all aliased columns in `with_columns`
+            // as replacements. This aligns with the Polars API's intent.
+
+            const replacements = withColsOp.columns
+                .filter(c => c._alias)
+                .map(c => c.toSQL()); // c.toSQL() will be like `(a + 1) AS "a"`
+
+            const replaceClause = replacements.length > 0 ? `REPLACE (${replacements.join(', ')})` : '';
+
+            return `* ${replaceClause}`;
         }
         const selectOp = this._getEffectiveSelect();
         if (selectOp) {

@@ -485,4 +485,115 @@ test("plus operator for concatenation and addition", () => {
     `);
 });
 
+test("cast expression", () => {
+    const q = XQL.from("my_table").select(
+        F.col("age_string").cast("INTEGER").alias("age_int"),
+        F.col("price").cast("VARCHAR").alias("price_str")
+    );
+    assertEquals(q.toSQL(), `
+        SELECT
+          TRY_CAST(age_string AS INTEGER) AS age_int,
+          TRY_CAST(price AS VARCHAR) AS price_str
+        FROM
+          my_table
+    `);
+    assertEquals(q.toString(), `
+        XQL.from("my_table")
+          .select(F.col("age_string").cast("INTEGER").alias("age_int"), F.col("price").cast("VARCHAR").alias("price_str"))
+    `);
+});
+
+test("column with space in name", () => {
+    const q = XQL.from("my_table")
+        .select(F.col("first name"))
+        .filter(F.col("first name").eq("Ben"));
+    assertEquals(q.toSQL(), `
+        SELECT
+          "first name"
+        FROM
+          my_table
+        WHERE
+          ("first name" = 'Ben')
+    `);
+    assertEquals(q.toString(), `
+        XQL.from("my_table").select(F.col("first name")).filter(F.col("first name").eq(F.lit("Ben")))
+    `);
+});
+
+test("with_columns to add a new column", () => {
+    const q = XQL.from("my_table")
+        .with_columns(F.col("a").plus(F.col("b")).alias("a_plus_b"));
+
+    assertEquals(q.toSQL(), `
+        SELECT
+          * REPLACE((a + b) AS a_plus_b)
+        FROM
+          my_table
+    `);
+    assertEquals(q.toString(), `
+        XQL.from("my_table").with_columns(F.col("a").plus(F.col("b")).alias("a_plus_b"))
+    `);
+});
+
+test("with_columns to overwrite an existing column", () => {
+    const q = XQL.from("my_table")
+        .with_columns(F.col("a").plus(1).alias("a"));
+
+    assertEquals(q.toSQL(), `
+      SELECT
+        * REPLACE((a + 1) AS a)
+      FROM
+        my_table
+    `);
+    assertEquals(q.toString(), `
+        XQL.from("my_table").with_columns(F.col("a").plus(F.lit(1)).alias("a"))
+    `);
+});
+
+test("chained with_columns", () => {
+    const q = XQL.from("penguins")
+        .with_columns(F.col("bill_length_mm").cast("FLOAT").alias("bill_length_mm"))
+        .with_columns(F.col("flipper_length_mm").cast("INTEGER").alias("flipper_length_mm"));
+
+    assertEquals(q.toSQL(), `
+        SELECT
+          * REPLACE (TRY_CAST(flipper_length_mm AS INTEGER) AS flipper_length_mm)
+        FROM
+          (
+            SELECT
+              * REPLACE (TRY_CAST(bill_length_mm AS FLOAT) AS bill_length_mm)
+            FROM
+              penguins
+          ) AS t0
+    `);
+    assertEquals(q.toString(), `
+        const t0 = XQL.from("penguins").with_columns(F.col("bill_length_mm").cast("FLOAT").alias("bill_length_mm"));
+        XQL.from(t0).with_columns(F.col("flipper_length_mm").cast("INTEGER").alias("flipper_length_mm"))
+    `);
+});
+
+test("with_columns followed by select", () => {
+    const q = XQL.from('penguins')
+        .with_columns(
+            F.col("bill_length_mm").cast("FLOAT").alias("bill_length_mm"),
+            F.col("bill_depth_mm").cast("FLOAT").alias("bill_depth_mm")
+        )
+        .select("species", "island", "bill_length_mm");
+
+    assertEquals(q.toSQL(), `
+        SELECT
+            species,
+            island,
+            bill_length_mm
+        FROM
+            (
+                SELECT
+                    * REPLACE (TRY_CAST(bill_length_mm AS FLOAT) AS bill_length_mm, TRY_CAST(bill_depth_mm AS FLOAT) AS bill_depth_mm)
+                FROM
+                    penguins
+            ) AS t0
+    `);
+});
+
+
 console.log("All tests passed!");

@@ -1,37 +1,77 @@
 <script lang="ts">
+
+    import RadialMenu from './RadialMenu.svelte';
+
     let {
         tableData,
         tableHeaders = $bindable([]),
         isLoadingQuery,
         queryTime,
         scrollContainer = $bindable(),
+        items,
+        queryString,
+        setQuery,
         tcount,
         ...restProps
     } = $props();
 
   let isDragging = $state(false);
   let dragSelectionState = $state(false);
+  let isRadialInteraction = $state(false); // Flag to track the interaction
+  let menu = $state({
+    open: false,
+    x: 0,
+    y: 0,
+    header: null,
+    items: []
+  });
 
   function handleHeaderMouseDown(index: number, event: MouseEvent) {
     event.preventDefault();
 
-    // Unfocus the CodeMirror editor if it's active
     const activeEl = document.activeElement as HTMLElement;
     if (activeEl?.classList.contains('cm-content')) {
       activeEl.blur();
     }
 
-    isDragging = true;
-    // Determine if we are selecting or deselecting based on the initial header's state
-    const initialSelected = !tableHeaders[index].selected;
-    dragSelectionState = initialSelected;
-    tableHeaders[index].selected = initialSelected;
+    if (event.altKey) {
+      // Alt-click toggles the color column
+      const isCurrentlyColor = tableHeaders[index].isColorColumn;
+      // First, deselect any other color column
+      tableHeaders.forEach(h => h.isColorColumn = false);
+      // Then, toggle the clicked one
+      tableHeaders[index].isColorColumn = !isCurrentlyColor;
+      // A color column cannot also be an axis column
+      if (tableHeaders[index].isColorColumn) {
+        tableHeaders[index].selected = false;
+      }
+    } else {
+      // Normal click handles axis selection
+      isDragging = true;
+      const initialSelected = !tableHeaders[index].selected;
+      dragSelectionState = initialSelected;
+      tableHeaders[index].selected = initialSelected;
+      tableHeaders[index].isColorColumn = false; // Cannot be both
+    }
   }
 
   function handleHeaderMouseEnter(index: number) {
     if (isDragging) {
       tableHeaders[index].selected = dragSelectionState;
     }
+  }
+
+  function handleRightMouseDown(event: MouseEvent, header) {
+    event.preventDefault();
+    isRadialInteraction = true;
+
+    menu = {
+      open: true,
+      x: event.clientX,
+      y: event.clientY,
+      header: header,
+      items: items
+    };
   }
 
   function getTextColorForType(type: string): string {
@@ -58,7 +98,29 @@
   }
 </script>
 
-<svelte:window onmouseup={() => isDragging = false} />
+{#if menu.open}
+    <RadialMenu
+        items={menu.items}
+        x={menu.x}
+        y={menu.y}
+        onSelect={(item) => { 
+          if (item.action) item.action(menu.header);
+          menu.open = false;
+        }}
+        onClose={() => menu.open = false}
+    />
+{/if}
+
+<svelte:window
+    onmouseup={() => isDragging = false}
+    oncontextmenu={(e) => {
+        // If this contextmenu event is part of our radial interaction, prevent it.
+        if (isRadialInteraction) {
+            e.preventDefault();
+            isRadialInteraction = false; // Reset the flag after the interaction is complete.
+        }
+    }}
+/>
 <div
     id="table-container" class="flex flex-col flex-grow min-h-0 rounded-lg shadow-md border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-800 mt-4 relative"
     {...restProps}
@@ -97,19 +159,35 @@
                     class:dark:bg-blue-800={header.selected}
                     class:dark:hover:bg-slate-700={!header.selected}
                     class:dark:hover:bg-blue-900={header.selected}
-                    onmousedown={(e) => handleHeaderMouseDown(index, e)}
-                    onmouseenter={() => handleHeaderMouseEnter(index)}>
+                    onmousedown={(e) => {
+                      if (e.button === 2) { // Right-click
+                        handleRightMouseDown(e, header);
+                      } else {
+                        handleHeaderMouseDown(index, e);
+                      }
+                    }}
+                    onmouseenter={() => handleHeaderMouseEnter(index)}
+                    oncontextmenu={(e) => e.preventDefault()}>
                     <div class="flex flex-col">
-                    <span class="font-semibold">{header.name}</span>
-                    <span class="font-normal text-slate-500 dark:text-slate-400">{header.type}</span>
+                    <span class="font-bold">{header.name}</span>
+                    <div class="flex flex-row">
+                        <span class="self-start font-semibold {getTextColorForType(header.type)} border rounded-r-xl px-1 text-xs">
+                            {header.type}
+                        </span>
+                        {#if header.isColorColumn}
+                          <span class="self-start font-semibold text-red-700 border rounded-r-xl px-1 text-xs ml-1">
+                            colour
+                          </span>
+                        {/if}
+                    </div>
                     </div>
                 </th>
                 {/each}
             </tr>
             </thead>
-            <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+            <tbody class="divide-y divide-slate-200 dark:divide-slate-700 bg-slate-50">
                 {#each tableData as row, i (i)}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                    <tr class="hover:bg-slate-300 dark:hover:bg-slate-700/50" class:bg-slate-200={i % 2 === 1}>
                     {#each Object.values(row) as val, colIndex}
                         <td class="p-3 whitespace-nowrap font-mono">
                             <span class:text-slate-400={val === null} class:dark:text-slate-500={val === null}

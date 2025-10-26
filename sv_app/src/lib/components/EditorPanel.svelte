@@ -4,9 +4,18 @@
   import { sql } from "@codemirror/lang-sql";
   import { vsCodeDark } from "@fsegurai/codemirror-theme-vscode-dark";
 
-  let { queryString, sqlQuery, isDarkMode } = $props();
+  let { queryString = $bindable(), sqlQuery, isDarkMode } = $props();
 
   let showSqlEditor = $state(true);
+  let view = $state<EditorView>();
+
+  $effect(() => {
+    let newView = view;
+    if (view) {
+      view.dom.classList.add("h-full");
+    }
+  });
+
 </script>
 
 <div
@@ -28,11 +37,30 @@
       bind:value={queryString}
       lang={javascript()}
       themes={isDarkMode ? [vsCodeDark] : []}
+      onready={(cm_view) => view = cm_view}
+      lineNumbers={false}
+      foldGutter={false}
+      highlight={{
+        activeLine: false,
+        activeLineGutter: false
+      }}
     />
   </div>
   {#if showSqlEditor}
-    <div class="h-full w-1/2 border-l border-slate-300 dark:border-slate-600 overflow-scroll">
-      <CodeMirror class="w-full h-full bg-slate-50 dark:bg-slate-800/50" value={sqlQuery} lang={sql()} themes={isDarkMode ? [vsCodeDark] : []} readonly={true} />
+    <div class="h-full w-1/2 border-l border-slate-300 dark:border-slate-600 overflow-scroll border-l-4">
+      <CodeMirror 
+        class="w-full h-full bg-slate-50 dark:bg-slate-800" 
+        value={sqlQuery} 
+        lang={sql()}
+        themes={isDarkMode ? [vsCodeDark] : []} 
+        readonly={true}
+        lineNumbers={false}
+        foldGutter={false}
+        highlight={{
+          activeLine: false,
+          activeLineGutter: false
+        }}
+        />
     </div>
   {/if}
 </div>
