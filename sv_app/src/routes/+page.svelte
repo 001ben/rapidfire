@@ -9,11 +9,13 @@
   import { XQL, F } from "$lib/xql";
   import { Type } from "@uwdata/flechette"; // Import Type enum
   import { createShortcuts } from "$lib/shortcuts";
-  import * as aq from "arquero";
   // import { DuckDB } from "@uwdata/mosaic-duckdb";
-  import * as vg from "@uwdata/vgplot";
+
   import { onMount } from "svelte";
   import { StateHistory } from "runed";
+
+  let vg;
+  let aq;
 
   const DATA_BASE_URL =
     "https://raw.githubusercontent.com/uwdata/mosaic/main/data/";
@@ -99,6 +101,8 @@
   let hasMoreData = $state(true); // New state to track if there's more data to load
 
   onMount(async () => {
+    vg = await import("@uwdata/vgplot");
+    aq = await import("arquero");
     try {
       // Set up the database connector
       vg.coordinator().databaseConnector(vg.wasmConnector());

@@ -2,7 +2,14 @@
     import CodeMirror from "svelte-codemirror-editor";
     import { javascript } from "@codemirror/lang-javascript";
     import { vsCodeDark } from "@fsegurai/codemirror-theme-vscode-dark";
-    import * as vg from "@uwdata/vgplot";
+    // import * as vg from "@uwdata/vgplot";
+    import { onMount } from "svelte";
+
+    let vg;
+
+    onMount(async () => {
+      vg = await import("@uwdata/vgplot");
+    });
 
     let { spec = $bindable(), isDarkMode } = $props();
 
