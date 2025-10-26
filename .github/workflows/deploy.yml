@@ -18,12 +18,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: 'npm'
+          cache-dependency-path: sv_app/package-lock.json
 
       - name: Install dependencies
+        working-directory: ./sv_app
         run: npm i
 
       - name: build
+        working-directory: ./sv_app
         env:
           BASE_PATH: '/${{ github.event.repository.name }}/sv_app/'
         run: |
