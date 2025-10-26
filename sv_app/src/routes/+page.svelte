@@ -70,6 +70,7 @@
 
   $effect(() => {
     const currentQueryString = queryString;
+    if(!F || !XQL) return;
     try {
       const newQuery = eval(currentQueryString);
       offset = 0; // Reset offset when the query string changes
