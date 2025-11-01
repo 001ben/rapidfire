@@ -9,7 +9,7 @@ export function addGroupBy(currentQuery: string, setQuery: (q: string) => void, 
         countCol += '_' + countCol;
     }
 
-    const newQuery = `${currentQuery}\n  .group_by(${colnames.map(c => `"${c}"`).join(', ')})\n  .agg(F.count('*').alias('${countCol}'))\n  .order_by(F.col('${countCol}').desc())`;
+    const newQuery = `${currentQuery}\n.group_by(${colnames.map(c => `"${c}"`).join(', ')})\n.agg(F.count('*').alias('${countCol}'))\n.order_by(F.col('${countCol}').desc())`;
     setQuery(newQuery);
 }
 
@@ -18,7 +18,7 @@ export function addSelect(currentQuery: string, setQuery: (q: string) => void, c
     if (colnames.length === 0) {
         colnames = ['*'];
     }
-    const newQuery = `${currentQuery}\n  .select(${colnames.map(c => `"${c}"`).join(', ')})`;
+    const newQuery = `${currentQuery}\n.select(${colnames.map(c => `"${c}"`).join(', ')})`;
     setQuery(newQuery);
 }
 
@@ -30,7 +30,7 @@ export function addCast(currentQuery: string, setQuery: (q: string) => void, col
     const lines = trimmedQuery.split('\n');
     const lastLine = lines[lines.length - 1].trim();
 
-    if (lastLine.startsWith('.with_columns')) {
+    if (lastLine.startsWith('.with_columns') && !lastLine.includes(column)) {
         // Find the last closing parenthesis on the last line
         const lastParenIndex = lastLine.lastIndexOf(')');
         if (lastParenIndex !== -1) {
@@ -44,12 +44,12 @@ export function addCast(currentQuery: string, setQuery: (q: string) => void, col
         }
     } else {
         // No .with_columns() at the end, so append a new one.
-        const newQuery = `${currentQuery}\n  .with_columns(${castExpr})`;
+        const newQuery = `${currentQuery}\n.with_columns(${castExpr})`;
         setQuery(newQuery);
     }
 }
 
-export function addSort(currentQuery: string, setQuery: (q: string) => void, column: string, direction: 'asc' | 'desc') {
+export function addSort(currentQuery: string, setQuery: (q: string) => void, column: string, direction: 'asc' | 'desc', append: boolean = false) {
     const sortExpr = `F.col("${column}").${direction}()`;
 
     const trimmedQuery = currentQuery.trim();
@@ -57,15 +57,20 @@ export function addSort(currentQuery: string, setQuery: (q: string) => void, col
     const lastLine = lines[lines.length - 1].trim();
 
     if (lastLine.startsWith('.order_by')) {
-        const lastParenIndex = lastLine.lastIndexOf(')');
-        if (lastParenIndex !== -1) {
-            const newLastLine = `${lastLine.slice(0, lastParenIndex)}, ${sortExpr})`;
-            lines[lines.length - 1] = newLastLine;
-            setQuery(lines.join('\n'));
-            return;
+        if (append) {
+            const lastParenIndex = lastLine.lastIndexOf(')');
+            if (lastParenIndex !== -1) {
+                const newLastLine = `${lastLine.slice(0, lastParenIndex)}, ${sortExpr})`;
+                lines[lines.length - 1] = newLastLine;
+                setQuery(lines.join('\n'));
+                return;
+            }
+        } else {
+            setQuery(lines.slice(0, lines.length - 1).join('\n') + `\n.order_by(${sortExpr})`)
         }
+    } else {
+        // No .order_by() at the end, so append a new one.
+        setQuery(`${currentQuery}\n.order_by(${sortExpr})`);
     }
     
-    // No .order_by() at the end, so append a new one.
-    setQuery(`${currentQuery}\n  .order_by(${sortExpr})`);
 }
