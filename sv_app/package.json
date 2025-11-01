@@ -24,16 +24,19 @@
 		"vite": "^7.1.7"
 	},
 	"dependencies": {
+		"@babel/runtime": "^7.28.4",
 		"@codemirror/lang-javascript": "^6.2.4",
-		"svelte-codemirror-editor": "^2.1.0",
-		"@uwdata/mosaic-duckdb": "^0.20.1",
 		"@codemirror/lang-sql": "^6.10.0",
 		"@fsegurai/codemirror-theme-bundle": "^6.2.2",
 		"@fsegurai/codemirror-theme-vscode-dark": "^6.2.2",
+		"@uiw/codemirror-theme-vscode": "^4.25.2",
 		"@uwdata/flechette": "^2.2.4",
+		"@uwdata/mosaic-duckdb": "^0.20.1",
 		"@uwdata/vgplot": "^0.20.1",
 		"arquero": "^8.0.3",
 		"runed": "^0.35.1",
-		"sql-formatter": "^15.6.10"
+		"sql-formatter": "^15.6.10",
+		"svelte-codemirror-editor": "^2.1.0",
+		"svelte-notifications": "^0.9.98"
 	}
 }

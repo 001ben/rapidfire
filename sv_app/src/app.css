@@ -1,3 +1,24 @@
 @import 'tailwindcss';
 
 @custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* VSCode Dark Theme Colors */
+  --color-vscode-background: #1e1e1e;
+  --color-vscode-foreground: #9cdcfe;
+  --color-vscode-blue: #569cd6;
+  --color-vscode-purple: #c586c0;
+  --color-vscode-cyan: #4ec9b0;
+  --color-vscode-yellow: #dcdcaa;
+  --color-vscode-green: #b5cea8;
+  --color-vscode-orange: #ce9178;
+  --color-vscode-comment: #6a9955;
+  --color-vscode-gray-100: #d4d4d4;
+  --color-vscode-gray-200: #c6c6c6;
+  --color-vscode-gray-300: #838383;
+  --color-vscode-gray-400: #808080;
+}
+
+.cm-editor {
+  height: 100%
+}

@@ -1,13 +1,15 @@
 <script lang="ts">
   import CodeMirror from "svelte-codemirror-editor";
+  import { EditorView } from "@codemirror/view"
   import { javascript } from "@codemirror/lang-javascript";
   import { sql } from "@codemirror/lang-sql";
-  import { vsCodeDark } from "@fsegurai/codemirror-theme-vscode-dark";
+  import { vscodeDark, vscodeLight } from "@uiw/codemirror-theme-vscode";
+  import { isDarkMode  } from "$lib/logic/darkmode.svelte";
 
-  let { queryString = $bindable(), sqlQuery, isDarkMode } = $props();
+  let { queryString = $bindable(), sqlQuery } = $props();
 
   let showSqlEditor = $state(true);
-  let view = $state<EditorView>();
+  let view = $state<EditorView | undefined>();
 
   $effect(() => {
     let newView = view;
@@ -20,11 +22,11 @@
 
 <div
   id="editor-container"
-  class="relative flex flex-shrink-0 h-56 md:h-64 rounded-lg shadow-md overflow-hidden border border-slate-300 dark:border-slate-700"
+  class="relative flex flex-shrink-0 h-full rounded-lg shadow-md overflow-hidden border border-slate-300 dark:border-vscode-gray-300"
 >
   <button
     onclick={() => (showSqlEditor = !showSqlEditor)}
-    class="absolute top-2 z-10 p-1 rounded bg-slate-100/50 hover:bg-slate-200 dark:bg-slate-900/50 dark:hover:bg-slate-700 text-xs font-mono"
+    class="absolute top-2 z-10 p-1 rounded bg-slate-100/50 hover:bg-slate-200 dark:bg-vscode-background/50 dark:hover:bg-vscode-gray-400/50 text-xs font-mono"
     class:right-2={!showSqlEditor}
     class:right-6={showSqlEditor}
     title="Toggle SQL View"
@@ -33,10 +35,10 @@
   </button>
     <div class={{'w-1/2': showSqlEditor, 'w-full': !showSqlEditor, "h-full transition-all duration-300": true}}>
     <CodeMirror
-      class="w-full h-full bg-white dark:bg-slate-800"
+      class="w-full h-full bg-white dark:bg-vscode-background"
       bind:value={queryString}
       lang={javascript()}
-      themes={isDarkMode ? [vsCodeDark] : []}
+      theme={isDarkMode.dark ? vscodeDark : vscodeLight }
       onready={(cm_view) => view = cm_view}
       lineNumbers={false}
       foldGutter={false}
@@ -47,12 +49,12 @@
     />
   </div>
   {#if showSqlEditor}
-    <div class="h-full w-1/2 border-l border-slate-300 dark:border-slate-600 overflow-scroll border-l-4">
+    <div class="h-full w-1/2 border-l border-slate-300 dark:border-vscode-gray-300 overflow-scroll border-l-4">
       <CodeMirror 
-        class="w-full h-full bg-slate-50 dark:bg-slate-800" 
+        class="w-full h-full bg-slate-50 dark:bg-vscode-background" 
         value={sqlQuery} 
         lang={sql()}
-        themes={isDarkMode ? [vsCodeDark] : []} 
+        theme={isDarkMode.dark ? vscodeDark : vscodeLight} 
         readonly={true}
         lineNumbers={false}
         foldGutter={false}
