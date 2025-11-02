@@ -1,8 +1,9 @@
 import { format } from 'sql-formatter';
-import { Column, Expression } from './expressions.js';
+import { Column, Expression, DistinctOnExpression } from './expressions.js';
 import { col, lit } from './functions.js';
 
 type SelectOperation = { type: 'select'; columns: Expression[] };
+type DistinctOperation = { type: 'distinct' };
 type FilterOperation = { type: 'filter'; expression: Expression };
 type GroupByOperation = { type: 'group_by'; columns: Expression[] };
 type AggOperation = { type: 'agg'; aggregations: Expression[] };
@@ -14,6 +15,7 @@ type OffsetOperation = { type: 'offset'; n: number };
 
 type Operation =
     | SelectOperation
+    | DistinctOperation
     | FilterOperation
     | GroupByOperation
     | AggOperation
@@ -62,6 +64,10 @@ export class XQL {
             return lit(c);
         });
         return this._newQuery({ type: 'select', columns: columnExpressions }, ['with_columns', 'group_by', 'agg']);
+    }
+
+    distinct(): XQL {
+        return this._addOperation({ type: 'distinct' });
     }
 
     filter(expression: Expression): XQL {
@@ -199,6 +205,9 @@ export class XQL {
                 case 'select':
                     jsString += `.select(${op.columns.map(c => c.toString()).join(', ')})`;
                     break;
+                case 'distinct':
+                    jsString += `.distinct()`;
+                    break;
                 case 'with_columns':
                     jsString += `.with_columns(${op.columns.map(c => c.toString()).join(', ')})`;
                     break;
@@ -264,38 +273,41 @@ export class XQL {
     }
 
     private _getSelectClause(): string {
+        const isDistinct = this._operations.some(op => op.type === 'distinct');
+        const distinctClause = isDistinct ? 'DISTINCT ' : '';
+
+        const selectOp = this._getEffectiveSelect();
+        const distinctOnExpr = selectOp?.columns.find(c => c instanceof DistinctOnExpression);
+
+        if (distinctOnExpr) {
+            const otherCols = selectOp.columns.filter(c => !(c instanceof DistinctOnExpression));
+            const distinctOnSql = distinctOnExpr.toSQL();
+            const otherColsSql = otherCols.map(c => c.toSQL()).join(', ');
+            return `${distinctOnSql} ${otherColsSql}`;
+        }
+
         const aggOp = this._operations.find(op => op.type === 'agg');
         if (aggOp) {
             const group_byOp = this._operations.find(op => op.type === 'group_by');
             const group_byCols = group_byOp ? group_byOp.columns.map(c => c.toSQL()) : [];
             const aggCols = aggOp.aggregations.map(a => a.toSQL());
-            return [...group_byCols, ...aggCols].join(', ');
+            return `${distinctClause}${ [...group_byCols, ...aggCols].join(', ')}`;
         }
 
         const withColsOp = this._operations.find(op => op.type === 'with_columns');
         if (withColsOp) {
-            // For `with_columns`, we assume any aliased expression is either a new column
-            // or is intended to overwrite an existing one.
-            // We can partition them into columns to add and columns to replace.
-            // However, without knowing the source schema, it's hard to know if an alias
-            // is a new column or an overwrite.
-            // DuckDB's `REPLACE` is perfect for overwrites, and `SELECT *, ...` for new columns.
-            // A simple and effective strategy is to treat all aliased columns in `with_columns`
-            // as replacements. This aligns with the Polars API's intent.
-
             const replacements = withColsOp.columns
                 .filter(c => c._alias)
-                .map(c => c.toSQL()); // c.toSQL() will be like `(a + 1) AS "a"`
+                .map(c => c.toSQL());
 
             const replaceClause = replacements.length > 0 ? `REPLACE (${replacements.join(', ')})` : '';
+            return `${distinctClause}* ${replaceClause}`;
+        }
 
-            return `* ${replaceClause}`;
-        }
-        const selectOp = this._getEffectiveSelect();
         if (selectOp) {
-            return selectOp.columns.map(c => c.toSQL()).join(', ');
+            return `${distinctClause}${selectOp.columns.map(c => c.toSQL()).join(', ')}`;
         }
-        return '*';
+        return `${distinctClause}*`;
     }
 
     private _getWhereClause(): string | null {

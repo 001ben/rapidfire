@@ -769,4 +769,34 @@ test("agg after group_by, agg, and order_by", () => {
 });
 
 
+test("distinct", () => {
+    const q = XQL.from("my_table").distinct().select("a", "b");
+    assertEquals(q.toSQL(), `
+        SELECT DISTINCT
+          a,
+          b
+        FROM
+          my_table
+    `);
+    assertEquals(q.toString(), `
+        XQL.from("my_table")
+          .distinct()
+          .select(c("a"), c("b"))
+    `);
+});
+
+test("distinct on", () => {
+    const q = XQL.from("my_table").select(F.distinct_on("a"), "b");
+    assertEquals(q.toSQL(), `
+        SELECT DISTINCT ON (a)
+          b
+        FROM
+          my_table
+    `);
+    assertEquals(q.toString(), `
+        XQL.from("my_table")
+          .select(F.distinct_on(c("a")), c("b"))
+    `);
+});
+
 console.log("All tests passed!");

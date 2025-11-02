@@ -299,3 +299,22 @@ export class Aggregation extends Expression {
     return `F.${this._name.toLowerCase()}(${this._column.toString()})`;
   }
 }
+
+export class DistinctOnExpression extends Expression {
+    _columns: Expression[];
+
+    constructor(columns: Expression[]) {
+        super();
+        this._columns = columns;
+    }
+
+    toSQL(): string {
+        const cols = this._columns.map(c => c.toSQL()).join(', ');
+        return `DISTINCT ON (${cols})`;
+    }
+
+    toString(): string {
+        const cols = this._columns.map(c => c.toString()).join(', ');
+        return `F.distinct_on(${cols})`;
+    }
+}
