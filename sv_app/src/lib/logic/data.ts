@@ -1,16 +1,17 @@
+import type { Dataset } from "$lib/logic/types";
 
 const MOSAIC_DATA_URL =
   "https://raw.githubusercontent.com/uwdata/mosaic/main/data/";
 
 export const exampleDatasets: Dataset[] = [
   {
-    name: "pokemon",
-    url: "https://gist.githubusercontent.com/armgilles/194bcff35001e7eb53a2a8b441e8b2c6/raw/92200bc0a673d5ce2110aaad4544ed6c4010f687/pokemon.csv",
+    name: "penguins",
+    url: "https://raw.githubusercontent.com/allisonhorst/palmerpenguins/main/inst/extdata/penguins.csv",
     type: "csv",
   },
   {
-    name: "penguins",
-    url: "https://raw.githubusercontent.com/allisonhorst/palmerpenguins/main/inst/extdata/penguins.csv",
+    name: "pokemon",
+    url: "https://gist.githubusercontent.com/armgilles/194bcff35001e7eb53a2a8b441e8b2c6/raw/92200bc0a673d5ce2110aaad4544ed6c4010f687/pokemon.csv",
     type: "csv",
   },
   { name: "athletes", url: `${MOSAIC_DATA_URL}athletes.csv`, type: "csv" },
@@ -30,13 +31,6 @@ export async function import_vg_aq() {
   let vg = await import("@uwdata/vgplot");
   let aq = await import("arquero");
   return {vg, aq};
-}
-
-// Define the shape of the dataset object
-export interface Dataset {
-  name: string;
-  url: string;
-  type: "csv" | "parquet";
 }
 
 export class DataManager {
@@ -116,6 +110,15 @@ export class DataManager {
         throw new Error(`Unsupported file type of URL: ${type}`);
       }
       return {name, url, type};
+  }
+
+  async showTables() {
+    const duckdb = await this.vg.coordinator().manager.db.getDuckDB();
+    const dbConn = await duckdb.connect();
+    const query = await dbConn.query("show all tables");
+    const names = query.toArray().map((x:any) => x.toJSON().name);
+    dbConn.close();
+    return names;
   }
 
   async exec(query: string) {

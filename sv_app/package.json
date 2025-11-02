@@ -37,6 +37,7 @@
 		"runed": "^0.35.1",
 		"sql-formatter": "^15.6.10",
 		"svelte-codemirror-editor": "^2.1.0",
-		"svelte-notifications": "^0.9.98"
+		"svelte-notifications": "^0.9.98",
+		"xlsx": "^0.18.5"
 	}
 }

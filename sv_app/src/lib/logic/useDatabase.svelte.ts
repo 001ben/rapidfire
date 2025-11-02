@@ -1,4 +1,5 @@
-import { DataManager, exampleDatasets, type Dataset } from "$lib/logic/data";
+import { DataManager, exampleDatasets } from "$lib/logic/data";
+import { type Dataset } from "./types";
 import { XQL, F } from "$lib/xql";
 
 export function useDatabase(initialDataset: Dataset) {

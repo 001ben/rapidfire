@@ -5,4 +5,11 @@ export interface TableHeader {
     selected: boolean;
     isColorColumn?: boolean;
   }
+// Define the shape of the dataset object
+
+export interface Dataset {
+  name: string;
+  url: string;
+  type: "csv" | "parquet";
+}
   
