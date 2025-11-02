@@ -1,17 +1,17 @@
-import { XQL, F } from './index.js';
+import { XQL, F, c } from './index.js';
 
-function test(name, fn) {
+function test(name: string, fn: () => void) {
     try {
         fn();
         console.log(`✅ ${name}`);
-    } catch (e) {
+    } catch (e: any) {
         console.error(`❌ ${name}`);
         console.error(e);
         process.exit(1);
     }
 }
 
-function assertEquals(a, b) {
+function assertEquals(a: string, b: string) {
     const aClean = a.trim().replace(/\s+/g, '');
     const bClean = b.trim().replace(/\s+/g, '');
     if (aClean !== bClean) {
@@ -32,12 +32,12 @@ test("basic select", () => {
     `);
     assertEquals(q.toString(), `
         XQL.from("my_table")
-          .select(F.col("a"), F.col("b"))
+          .select(c("a"), c("b"))
     `);
 });
 
 test("select with alias", () => {
-    const q = XQL.from("my_table").select(F.col("a").alias("my_a"));
+    const q = XQL.from("my_table").select(c("a").alias("my_a"));
     assertEquals(q.toSQL(), `
         SELECT
           a AS my_a
@@ -46,7 +46,7 @@ test("select with alias", () => {
     `);
     assertEquals(q.toString(), `
         XQL.from("my_table")
-          .select(F.col("a").alias("my_a"))
+          .select(c("a").alias("my_a"))
     `);
 });
 
@@ -63,13 +63,13 @@ test("sequential select", () => {
     `);
     assertEquals(q.toString(), `
         XQL.from("penguins")
-          .select(F.col("island"))
+          .select(c("island"))
     `);
 });
 
 test("sequential select with wildcard", () => {
     const q = XQL.from("penguins")
-        .select(F.col("*"))
+        .select(c("*"))
         .select("species", "island");
 
     assertEquals(q.toSQL(), `
@@ -81,14 +81,14 @@ test("sequential select with wildcard", () => {
     `);
     assertEquals(q.toString(), `
         XQL.from("penguins")
-          .select(F.col("species"), F.col("island"))
+          .select(c("species"), c("island"))
     `);
 });
 
 test("sequential select with wildcard at the end", () => {
     const q = XQL.from("penguins")
         .select("species", "island")
-        .select(F.col("*"));
+        .select(c("*"));
 
     assertEquals(q.toSQL(), `
         SELECT
@@ -99,7 +99,7 @@ test("sequential select with wildcard at the end", () => {
     `);
     assertEquals(q.toString(), `
         XQL.from("penguins")
-          .select(F.col("species"), F.col("island"))
+          .select(c("species"), c("island"))
     `);
 });
 
@@ -113,7 +113,7 @@ test("from-less select", () => {
 });
 
 test("filter with gt", () => {
-    const q = XQL.from("my_table").filter(F.col("a").gt(10));
+    const q = XQL.from("my_table").filter(c("a").gt(10));
     assertEquals(q.toSQL(), `
         SELECT
           *
@@ -124,12 +124,12 @@ test("filter with gt", () => {
     `);
     assertEquals(q.toString(), `
         XQL.from("my_table")
-          .filter(F.col("a").gt(F.lit(10)))
+          .filter(c("a").gt(F.lit(10)))
     `);
 });
 
 test("filter with and", () => {
-    const q = XQL.from("my_table").filter(F.col("a").gt(10).and(F.col("b").lt(5)));
+    const q = XQL.from("my_table").filter(c("a").gt(10).and(c("b").lt(5)));
     assertEquals(q.toSQL(), `
         SELECT
           *
@@ -143,7 +143,7 @@ test("filter with and", () => {
     `);
     assertEquals(q.toString(), `
         XQL.from("my_table")
-          .filter(F.col("a").gt(F.lit(10)).and(F.col("b").lt(F.lit(5))))
+          .filter(c("a").gt(F.lit(10)).and(c("b").lt(F.lit(5))))
     `);
 });
 
@@ -162,13 +162,13 @@ test("group_by and agg", () => {
     `);
     assertEquals(q.toString(), `
         XQL.from("my_table")
-          .group_by(F.col("a"))
-          .agg(F.sum(F.col("b")).alias("total_b"))
+          .group_by(c("a"))
+          .agg(F.sum(c("b")).alias("total_b"))
     `);
 });
 
 test("order_by", () => {
-    const q = XQL.from("my_table").order_by(F.col("a").desc());
+    const q = XQL.from("my_table").order_by(c("a").desc());
     assertEquals(q.toSQL(), `
         SELECT
           *
@@ -179,14 +179,14 @@ test("order_by", () => {
     `);
     assertEquals(q.toString(), `
         XQL.from("my_table")
-          .order_by(F.col("a").desc())
+          .order_by(c("a").desc())
     `);
 });
 
 test("join", () => {
     const t1 = XQL.from("table1");
     const t2 = XQL.from("table2");
-    const q = t1.join(t2, F.col("a").eq(F.col("b")));
+    const q = t1.join(t2, c("a").eq(c("b")));
     assertEquals(q.toSQL(), `
         SELECT
           *
@@ -195,7 +195,7 @@ test("join", () => {
           INNER JOIN table2 ON (a = b)
     `);
     assertEquals(q.toString(), `const t0 = XQL.from("table2");
-XQL.from("table1")\n  .join(t0, F.col("a").eq(F.col("b")), "inner")`);
+XQL.from("table1")\n  .join(t0, c("a").eq(c("b")), "inner")`);
 });
 
 test("limit and offset", () => {
@@ -246,11 +246,11 @@ test("chained group_by", () => {
 
     assertEquals(q.toString(), `
         const t0 = XQL.from("my_table")
-          .group_by(F.col("country"), F.col("city"))
-          .agg(F.count(F.col("*")).alias("city_count"));
+          .group_by(c("country"), c("city"))
+          .agg(F.count(c("*")).alias("city_count"));
         XQL.from(t0)
-          .group_by(F.col("country"))
-          .agg(F.count(F.col("*")).alias("distinct_cities"))
+          .group_by(c("country"))
+          .agg(F.count(c("*")).alias("distinct_cities"))
     `);
 });
 
@@ -273,16 +273,16 @@ test("complex chained operations", () => {
         count DESC`);
     assertEquals(q.toString(), `
         XQL.from("penguins")
-          .select(F.col("species"), F.col("island"))
-          .group_by(F.col("island"))
-          .agg(F.count(F.col("*")).alias("count"))
-          .order_by(F.col("count").desc())
+          .select(c("species"), c("island"))
+          .group_by(c("island"))
+          .agg(F.count(c("*")).alias("count"))
+          .order_by(c("count").desc())
             `);
 });
 
 test("multiple joins", () => {
     const t1 = XQL.from("table1").select("a", "b");
-    const t2 = XQL.from("table2").filter(F.col("c").gt(10));
+    const t2 = XQL.from("table2").filter(c("c").gt(10));
     const t3 = XQL.from("table3").group_by("d").agg(F.sum("e").alias("total_e"));
     const t4 = XQL.from("table4");
 
@@ -318,14 +318,14 @@ test("multiple joins", () => {
     `);
 
     assertEquals(q.toString(), `
-        const t0 = XQL.from("table2").filter(F.col("c").gt(F.lit(10)));
-        const t1 = XQL.from("table3").group_by(F.col("d")).agg(F.sum(F.col("e")).alias("total_e"));
+        const t0 = XQL.from("table2").filter(c("c").gt(F.lit(10)));
+        const t1 = XQL.from("table3").group_by(c("d")).agg(F.sum(c("e")).alias("total_e"));
         const t2 = XQL.from("table4");
         XQL.from("table1")
-          .select(F.col("a"), F.col("b"))
-          .join(t0, F.col("a").eq(F.col("c")), "inner")
-          .join(t1, F.col("b").eq(F.col("d")), "inner")
-          .join(t2, F.col("a").eq(F.col("f")), "inner")
+          .select(c("a"), c("b"))
+          .join(t0, c("a").eq(c("c")), "inner")
+          .join(t1, c("b").eq(c("d")), "inner")
+          .join(t2, c("a").eq(c("f")), "inner")
     `);
 });
 
@@ -333,10 +333,10 @@ test("double group by", () => {
     const q = XQL.from('penguins')
         .group_by("species")
         .agg(F.count('*').alias('count'))
-        .order_by(F.col('count').desc())
+        .order_by(c('count').desc())
         .group_by("count")
         .agg(F.count('*').alias('count'))
-        .order_by(F.col('count').desc());
+        .order_by(c('count').desc());
 
     assertEquals(q.toSQL(), `
         SELECT
@@ -360,13 +360,13 @@ test("double group by", () => {
 
     assertEquals(q.toString(), `
         const t0 = XQL.from("penguins")
-          .group_by(F.col("species"))
-          .agg(F.count(F.col("*")).alias("count"))
-          .order_by(F.col("count").desc());
+          .group_by(c("species"))
+          .agg(F.count(c("*")).alias("count"))
+          .order_by(c("count").desc());
         XQL.from(t0)
-          .group_by(F.col("count"))
-          .agg(F.count(F.col("*")).alias("count"))
-          .order_by(F.col("count").desc())
+          .group_by(c("count"))
+          .agg(F.count(c("*")).alias("count"))
+          .order_by(c("count").desc())
     `);
 });
 
@@ -374,13 +374,13 @@ test("triple chained group_by", () => {
     const q = XQL.from("penguins")
         .group_by("island", "bill_length_mm", "bill_depth_mm", "flipper_length_mm", "body_mass_g")
         .agg(F.count('*').alias('count'))
-        .order_by(F.col('count').desc())
+        .order_by(c('count').desc())
         .group_by("bill_length_mm")
         .agg(F.count('*').alias('count'))
-        .order_by(F.col('count').desc())
+        .order_by(c('count').desc())
         .group_by("count")
         .agg(F.count('*').alias('count_count'))
-        .order_by(F.col('count_count').desc());
+        .order_by(c('count_count').desc());
 
     assertEquals(q.toSQL(), `
         SELECT
@@ -419,24 +419,24 @@ test("triple chained group_by", () => {
     `);
 
     assertEquals(q.toString(), `const t0 = XQL.from("penguins")
-  .group_by(F.col("island"), F.col("bill_length_mm"), F.col("bill_depth_mm"), F.col("flipper_length_mm"), F.col("body_mass_g"))
-  .agg(F.count(F.col("*")).alias("count"))
-  .order_by(F.col("count").desc());
+  .group_by(c("island"), c("bill_length_mm"), c("bill_depth_mm"), c("flipper_length_mm"), c("body_mass_g"))
+  .agg(F.count(c("*")).alias("count"))
+  .order_by(c("count").desc());
 const t0 = XQL.from(t0)
-  .group_by(F.col("bill_length_mm"))
-  .agg(F.count(F.col("*")).alias("count"))
-  .order_by(F.col("count").desc());
+  .group_by(c("bill_length_mm"))
+  .agg(F.count(c("*")).alias("count"))
+  .order_by(c("count").desc());
 XQL.from(t0)
-  .group_by(F.col("count"))
-  .agg(F.count(F.col("*")).alias("count_count"))
-  .order_by(F.col("count_count").desc())`);
+  .group_by(c("count"))
+  .agg(F.count(c("*")).alias("count_count"))
+  .order_by(c("count_count").desc())`);
 });
 
 test("select after group_by and agg", () => {
     const q = XQL.from("penguins")
         .group_by("species", "island", "bill_length_mm")
         .agg(F.count('*').alias('count'))
-        .order_by(F.col('count').desc())
+        .order_by(c('count').desc())
         .select("species", "island");
 
     assertEquals(q.toSQL(), `
@@ -460,17 +460,17 @@ test("select after group_by and agg", () => {
     `);
     assertEquals(q.toString(), `
     const t0 = XQL.from("penguins")
-      .group_by(F.col("species"), F.col("island"), F.col("bill_length_mm"))
-      .agg(F.count(F.col("*")).alias("count"))
-      .order_by(F.col("count").desc());
+      .group_by(c("species"), c("island"), c("bill_length_mm"))
+      .agg(F.count(c("*")).alias("count"))
+      .order_by(c("count").desc());
     XQL.from(t0)
-      .select(F.col("species"), F.col("island"))`);
+      .select(c("species"), c("island"))`);
 });
 
 test("plus operator for concatenation and addition", () => {
     const q = XQL.from("my_table").select(
-        F.col("first_name").plus(" ").plus(F.col("last_name")).alias("full_name"),
-        F.col("price").plus(F.col("tax")).alias("total_price")
+        c("first_name").plus(" ").plus(c("last_name")).alias("full_name"),
+        c("price").plus(c("tax")).alias("total_price")
     );
     assertEquals(q.toSQL(), `
         SELECT
@@ -481,14 +481,14 @@ test("plus operator for concatenation and addition", () => {
     `);
     assertEquals(q.toString(), `
         XQL.from("my_table")
-          .select(F.col("first_name").plus(F.lit(" ")).plus(F.col("last_name")).alias("full_name"), F.col("price").plus(F.col("tax")).alias("total_price"))
+          .select(c("first_name").plus(F.lit(" ")).plus(c("last_name")).alias("full_name"), c("price").plus(c("tax")).alias("total_price"))
     `);
 });
 
 test("cast expression", () => {
     const q = XQL.from("my_table").select(
-        F.col("age_string").cast("INTEGER").alias("age_int"),
-        F.col("price").cast("VARCHAR").alias("price_str")
+        c("age_string").cast("INTEGER").alias("age_int"),
+        c("price").cast("VARCHAR").alias("price_str")
     );
     assertEquals(q.toSQL(), `
         SELECT
@@ -499,14 +499,14 @@ test("cast expression", () => {
     `);
     assertEquals(q.toString(), `
         XQL.from("my_table")
-          .select(F.col("age_string").cast("INTEGER").alias("age_int"), F.col("price").cast("VARCHAR").alias("price_str"))
+          .select(c("age_string").cast("INTEGER").alias("age_int"), c("price").cast("VARCHAR").alias("price_str"))
     `);
 });
 
 test("column with space in name", () => {
     const q = XQL.from("my_table")
-        .select(F.col("first name"))
-        .filter(F.col("first name").eq("Ben"));
+        .select(c("first name"))
+        .filter(c("first name").eq("Ben"));
     assertEquals(q.toSQL(), `
         SELECT
           "first name"
@@ -516,13 +516,13 @@ test("column with space in name", () => {
           ("first name" = 'Ben')
     `);
     assertEquals(q.toString(), `
-        XQL.from("my_table").select(F.col("first name")).filter(F.col("first name").eq(F.lit("Ben")))
+        XQL.from("my_table").select(c("first name")).filter(c("first name").eq(F.lit("Ben")))
     `);
 });
 
 test("with_columns to add a new column", () => {
     const q = XQL.from("my_table")
-        .with_columns(F.col("a").plus(F.col("b")).alias("a_plus_b"));
+        .with_columns(c("a").plus(c("b")).alias("a_plus_b"));
 
     assertEquals(q.toSQL(), `
         SELECT
@@ -531,13 +531,13 @@ test("with_columns to add a new column", () => {
           my_table
     `);
     assertEquals(q.toString(), `
-        XQL.from("my_table").with_columns(F.col("a").plus(F.col("b")).alias("a_plus_b"))
+        XQL.from("my_table").with_columns(c("a").plus(c("b")).alias("a_plus_b"))
     `);
 });
 
 test("with_columns to overwrite an existing column", () => {
     const q = XQL.from("my_table")
-        .with_columns(F.col("a").plus(1).alias("a"));
+        .with_columns(c("a").plus(1).alias("a"));
 
     assertEquals(q.toSQL(), `
       SELECT
@@ -546,14 +546,14 @@ test("with_columns to overwrite an existing column", () => {
         my_table
     `);
     assertEquals(q.toString(), `
-        XQL.from("my_table").with_columns(F.col("a").plus(F.lit(1)).alias("a"))
+        XQL.from("my_table").with_columns(c("a").plus(F.lit(1)).alias("a"))
     `);
 });
 
 test("chained with_columns", () => {
     const q = XQL.from("penguins")
-        .with_columns(F.col("bill_length_mm").cast("FLOAT").alias("bill_length_mm"))
-        .with_columns(F.col("flipper_length_mm").cast("INTEGER").alias("flipper_length_mm"));
+        .with_columns(c("bill_length_mm").cast("FLOAT").alias("bill_length_mm"))
+        .with_columns(c("flipper_length_mm").cast("INTEGER").alias("flipper_length_mm"));
 
     assertEquals(q.toSQL(), `
         SELECT
@@ -567,16 +567,16 @@ test("chained with_columns", () => {
           ) AS t0
     `);
     assertEquals(q.toString(), `
-        const t0 = XQL.from("penguins").with_columns(F.col("bill_length_mm").cast("FLOAT").alias("bill_length_mm"));
-        XQL.from(t0).with_columns(F.col("flipper_length_mm").cast("INTEGER").alias("flipper_length_mm"))
+        const t0 = XQL.from("penguins").with_columns(c("bill_length_mm").cast("FLOAT").alias("bill_length_mm"));
+        XQL.from(t0).with_columns(c("flipper_length_mm").cast("INTEGER").alias("flipper_length_mm"))
     `);
 });
 
 test("with_columns followed by select", () => {
     const q = XQL.from('penguins')
         .with_columns(
-            F.col("bill_length_mm").cast("FLOAT").alias("bill_length_mm"),
-            F.col("bill_depth_mm").cast("FLOAT").alias("bill_depth_mm")
+            c("bill_length_mm").cast("FLOAT").alias("bill_length_mm"),
+            c("bill_depth_mm").cast("FLOAT").alias("bill_depth_mm")
         )
         .select("species", "island", "bill_length_mm");
 
@@ -592,6 +592,179 @@ test("with_columns followed by select", () => {
                 FROM
                     penguins
             ) AS t0
+    `);
+});
+
+
+test("filter, order_by, then group_by", () => {
+    const q = XQL.from('_2025_LoL_esports_match_data_from_OraclesElixir')
+        .filter(c("position").eq("team"))
+        .order_by(c("patch").desc())
+        .group_by("league")
+        .agg(F.count('*').alias('count'))
+        .order_by(c('count').desc());
+
+    assertEquals(q.toSQL(), `
+        SELECT
+          league,
+          COUNT(*) AS count
+        FROM
+          (
+            SELECT
+              *
+            FROM
+              _2025_LoL_esports_match_data_from_OraclesElixir
+            WHERE
+              (position = 'team')
+          ) AS t0
+        GROUP BY
+          league
+        ORDER BY
+          count DESC
+    `);
+
+    assertEquals(q.toString(), `const t0 = XQL.from("_2025_LoL_esports_match_data_from_OraclesElixir")
+  .filter(c("position").eq(F.lit("team")))
+  .order_by(c("patch").desc());
+XQL.from(t0)
+  .group_by(c("league"))
+  .agg(F.count(c("*")).alias("count"))
+  .order_by(c("count").desc())`);
+});
+test("filter, order_by, then group_by without final order_by", () => {
+    const q = XQL.from('_2025_LoL_esports_match_data_from_OraclesElixir')
+        .filter(c("position").eq("team"))
+        .order_by(c("patch").desc())
+        .group_by("league")
+        .agg(F.count('*').alias('count'));
+
+    assertEquals(q.toSQL(), `
+        SELECT
+          league,
+          COUNT(*) AS count
+        FROM
+          (
+            SELECT
+              *
+            FROM
+              _2025_LoL_esports_match_data_from_OraclesElixir
+            WHERE
+              (position = 'team')
+          ) AS t0
+        GROUP BY
+          league
+    `);
+});
+
+test("new comparison operators", () => {
+    // is_null
+    const q1 = XQL.from("my_table").filter(c("a").is_null());
+    assertEquals(q1.toSQL(), `
+        SELECT * FROM my_table WHERE (a IS NULL)
+    `);
+    assertEquals(q1.toString(), `
+        XQL.from("my_table").filter(c("a").is_null())
+    `);
+
+    // is_not_null
+    const q2 = XQL.from("my_table").filter(c("a").is_not_null());
+    assertEquals(q2.toSQL(), `
+        SELECT * FROM my_table WHERE (a IS NOT NULL)
+    `);
+    assertEquals(q2.toString(), `
+        XQL.from("my_table").filter(c("a").is_not_null())
+    `);
+
+    // neq
+    const q3 = XQL.from("my_table").filter(c("a").neq(10));
+    assertEquals(q3.toSQL(), `
+        SELECT * FROM my_table WHERE (a <> 10)
+    `);
+    assertEquals(q3.toString(), `
+        XQL.from("my_table").filter(c("a").neq(F.lit(10)))
+    `);
+
+    // is_distinct_from
+    const q4 = XQL.from("my_table").filter(c("a").is_distinct_from("b"));
+    assertEquals(q4.toSQL(), `
+        SELECT * FROM my_table WHERE (a IS DISTINCT FROM 'b')
+    `);
+    assertEquals(q4.toString(), `
+        XQL.from("my_table").filter(c("a").is_distinct_from(F.lit("b")))
+    `);
+
+    // is_not_distinct_from
+    const q5 = XQL.from("my_table").filter(c("a").is_not_distinct_from(c("b")));
+    assertEquals(q5.toSQL(), `
+        SELECT * FROM my_table WHERE (a IS NOT DISTINCT FROM b)
+    `);
+    assertEquals(q5.toString(), `
+        XQL.from("my_table").filter(c("a").is_not_distinct_from(c("b")))
+    `);
+
+    // between
+    const q6 = XQL.from("my_table").filter(c("a").between(10, 20));
+    assertEquals(q6.toSQL(), `
+        SELECT * FROM my_table WHERE (a BETWEEN 10 AND 20)
+    `);
+    assertEquals(q6.toString(), `
+        XQL.from("my_table").filter(c("a").between(F.lit(10), F.lit(20)))
+    `);
+});
+
+test("shorthand 'c' and F.col are interchangeable", () => {
+    const q1 = XQL.from("my_table").select(c("a"));
+    assertEquals(q1.toSQL(), `
+        SELECT
+          a
+        FROM
+          my_table
+    `);
+    assertEquals(q1.toString(), `
+        XQL.from("my_table").select(c("a"))
+    `);
+
+    const q2 = XQL.from("my_table").select(F.col("a"));
+    assertEquals(q2.toSQL(), `
+        SELECT
+            a
+        FROM
+            my_table
+    `);
+    assertEquals(q2.toString(), `
+        XQL.from("my_table").select(c("a"))
+    `);
+});
+
+test("agg after group_by, agg, and order_by", () => {
+    const q = XQL.from('_2025_LoL_esports_match_data_from_OraclesElixir')
+        .group_by("gameid")
+        .agg(F.count('*').alias('count'))
+        .order_by(c('count').desc())
+        .agg(F.count('*').alias('count'));
+
+    assertEquals(q.toSQL(), `
+        SELECT
+          COUNT(*) AS count
+        FROM
+          (
+            SELECT
+              gameid,
+              COUNT(*) AS count
+            FROM
+              _2025_LoL_esports_match_data_from_OraclesElixir
+            GROUP BY
+              gameid
+          ) AS t0
+    `);
+
+    assertEquals(q.toString(), `
+        const t0 = XQL.from("_2025_LoL_esports_match_data_from_OraclesElixir")
+          .group_by(c("gameid"))
+          .agg(F.count(c("*")).alias("count"))
+          .order_by(c("count").desc());
+        XQL.from(t0)
+          .agg(F.count(c("*")).alias("count"))
     `);
 });
 

@@ -1,6 +1,6 @@
 import { DataManager, exampleDatasets } from "$lib/logic/data";
 import { type Dataset } from "./types";
-import { XQL, F } from "$lib/xql";
+import { XQL, F } from "$lib/xql/index";
 
 export function useDatabase(initialDataset: Dataset) {
   let db: DataManager;

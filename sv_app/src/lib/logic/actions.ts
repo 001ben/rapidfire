@@ -1,3 +1,7 @@
+export function addCount(currentQuery: string, setQuery: (q: string) => void) {
+    setQuery(`${currentQuery}\n.agg(F.count('*').alias('count'))`);
+}
+
 export function addGroupBy(currentQuery: string, setQuery: (q: string) => void, columns: string[]) {
     const colnames = columns.map(c => c.replaceAll('"', ''));
     if (colnames.length === 0) {

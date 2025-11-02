@@ -18,9 +18,8 @@
   import { onMount } from "svelte";
 
   import type { Dataset } from "$lib/logic/types";
-  import {DataManager, exampleDatasets} from "$lib/logic/data";
+  import {exampleDatasets} from "$lib/logic/data";
   import DatasetSelector from "$lib/components/DatasetSelector.svelte";
-    import { dateBin } from "@uwdata/mosaic-sql";
 
   const initialDataset = exampleDatasets[0];
 
@@ -96,17 +95,19 @@
 
   async function handleLoadFile(file: File, arrayBuffer: ArrayBuffer) {
     if (!queryEngine) return; // (assuming ui from useUIState)
-    let conn;
     try {
       queryEngine.isLoadingQuery = true;
-      const duckdb = await db.instance.vg.coordinator().manager.db.getDuckDB();
-      conn = await duckdb.connect();
-      const tableNames = await db.instance.showTables();
       const { cleanName, extension } = {
         cleanName: file.name.substring(0, file.name.lastIndexOf(".")),
         extension: file.name.substring(file.name.lastIndexOf(".")+1)
       };
       let tableName = cleanName;
+      // DuckDB unquoted identifiers cannot start with a number or special character.
+      // Prepend an underscore if the first character is not a letter.
+      if (!/^[a-zA-Z]/.test(tableName)) {
+        tableName = '_' + tableName;
+      }
+      const tableNames = await db.instance.showTables();
       if(tableNames.includes(tableName)) {
         let i = 1;
         while(tableNames.includes(tableName + i)) {
@@ -114,27 +115,33 @@
         }
         tableName = tableName + i;
       }
-      await duckdb.registerFileBuffer(file.name, new Uint8Array(arrayBuffer));
-      let res;
-      console.log("current table names ", tableNames);
-      console.log("creating table ", tableName);
+      await db.instance.registerFileBuffer(file.name, arrayBuffer);
+      console.log({table_names: tableNames, new_table_name: tableName, filename: file.name, extension: extension});
       switch(extension) {
         case 'csv':
-          await conn.send(`CREATE TABLE ${tableName} as select * from read_csv('${file.name}')`);
+          await db.instance.rawQuery(`CREATE TABLE ${tableName} as select * from read_csv('${file.name}')`, true);
           break;
-          case 'xlsx':
-          await conn.send(`CREATE TABLE ${tableName} as select * from read_xlsx('${file.name}', header = true)`);
+        case 'xlsx':
+          await db.instance.rawQuery(`CREATE TABLE ${tableName} as select * from read_xlsx('${file.name}', header = true)`, true);
           break;
+        case 'parquet':
+          await db.instance.rawQuery(`CREATE TABLE ${tableName} as select * from read_parquet('${file.name}')`, true);
+          break;
+        default:
+          addNotification({
+            text: `Unsupported file type: ${extension}`,
+            position: 'bottom-right',
+            type: "error",
+            removeAfter: 3000,
+          })
+          return;
       }
-      queryEngine.resetQuery(`XQL.from('${tableName}')`);
+      queryEngine.resetQuery(`return XQL.from('${tableName}')`);
     } catch (e) {
       console.error(e);
       queryEngine.queryError = e instanceof Error ? e.message : String(e);
     } finally {
       queryEngine.isLoadingQuery = false;
-      if (conn) {
-        await conn.close();
-      }
     }
   }
 
@@ -150,7 +157,7 @@
       await db.instance.clear({clients: false, cache: true})
     },
     queryHistory: queryEngine.queryHistory,
-    reset: () => queryEngine.resetQuery(`XQL.from('${initialDataset.name}')`),
+    reset: () => queryEngine.resetQuery(`return XQL.from('${initialDataset.name}')`),
     setQuery: queryEngine.setQuery,
     currentViewMode: () => viewMode,
     setViewMode: (mode) => viewMode = mode,
@@ -201,10 +208,6 @@
 {#if db.dbError}
   <div class="p-4 bg-red-100 text-red-800 h-screen flex items-center justify-center">
     <strong>Fatal Error:</strong> Could not load database. {db.dbError}
-  </div>
-{:else if queryEngine.queryError}
-  <div class="p-4 bg-red-100 text-red-800 h-screen flex items-center justify-center">
-    <strong>Query Error:</strong> {queryEngine.queryError}
   </div>
 {:else if !db.isDbReady}
   <div class="p-4 text-center h-screen flex items-center justify-center">
@@ -259,6 +262,11 @@
               <EditorPanel bind:queryString={queryEngine.queryString} sqlQuery={queryEngine.sqlQuery} />
             {/snippet}
             {#snippet bottom()}
+              {#if queryEngine.queryError}
+              <div class="p-4 bg-red-100 text-red-800 h-4 flex items-center justify-center">
+                <strong>Query Error:</strong> {queryEngine.queryError}
+              </div>
+              {/if}
               <DataTable
                 tableData={queryEngine.tableData}
                 bind:tableHeaders={queryEngine.tableHeaders}

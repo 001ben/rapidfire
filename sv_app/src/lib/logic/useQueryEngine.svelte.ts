@@ -1,4 +1,4 @@
-import { XQL, F } from "$lib/xql";
+import { XQL, F, c} from "$lib/xql";
 import { StateHistory } from "runed";
 import type { DataManager } from "$lib/logic/data";
 import { Type } from "@uwdata/flechette";
@@ -25,13 +25,13 @@ function getArrowTypeName(typeId: number): string {
 }
 
 const createQuery = (str: string) => {
-  return new Function('XQL', 'F', `return ${str}`)(XQL, F);
+  return new Function('XQL', 'F', 'c', str)(XQL, F, c);
 };
 
 export function useQueryEngine() {
   let db = $state<DataManager | null>(null);
 
-  let queryString = $state("XQL.from('')");
+  let queryString = $state("return XQL.from('')");
   const queryHistory = new StateHistory(
     () => queryString,
     (q: string) => (queryString = q),
@@ -67,6 +67,7 @@ export function useQueryEngine() {
     if(!F || !XQL) return;
     try {
       const newQuery = createQuery(currentQueryString);
+      console.log({newquery: newQuery, currentQueryString: currentQueryString});
       offset = 0; // Reset offset when the query string changes
       if (newQuery instanceof XQL) {
         if (tableScrollContainer) {
@@ -179,13 +180,13 @@ export function useQueryEngine() {
   }, 100); // Debounce by 100ms
   
   function setQuery(newQuery: string) {
-    queryString = newQuery;
+    queryString = newQuery.includes("return ") ? newQuery : "return " + newQuery;;
   }
   
   function resetQuery(newQuery: string) {
     offset = 0;
     hasMoreData = true;
-    queryString = newQuery;
+    queryString = newQuery.includes("return ") ? newQuery : "return " + newQuery;
   }
 
   function setDb(newDb: DataManager, initialQuery: string) {
