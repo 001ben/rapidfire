@@ -1,9 +1,4 @@
-import { Column, Literal, Aggregation, Expression, DistinctOnExpression } from './expressions.js';
-
-export function distinct_on(...columns: (string | Expression)[]): DistinctOnExpression {
-    const columnExpressions = columns.map(c => (typeof c === 'string' ? col(c) : c));
-    return new DistinctOnExpression(columnExpressions);
-}
+import { Column, Literal, Aggregation, Expression } from './expressions.js';
 
 export function col(name: string): Column {
     return new Column(name);

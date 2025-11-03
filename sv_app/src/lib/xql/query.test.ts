@@ -770,7 +770,7 @@ test("agg after group_by, agg, and order_by", () => {
 
 
 test("distinct", () => {
-    const q = XQL.from("my_table").distinct().select("a", "b");
+    const q = XQL.from("my_table").select("a", "b").distinct();
     assertEquals(q.toSQL(), `
         SELECT DISTINCT
           a,
@@ -780,22 +780,38 @@ test("distinct", () => {
     `);
     assertEquals(q.toString(), `
         XQL.from("my_table")
-          .distinct()
           .select(c("a"), c("b"))
+          .distinct()
     `);
 });
 
 test("distinct on", () => {
-    const q = XQL.from("my_table").select(F.distinct_on("a"), "b");
+    const q = XQL.from("my_table").select("a", "b").distinct("a");
     assertEquals(q.toSQL(), `
         SELECT DISTINCT ON (a)
+          a,
           b
         FROM
           my_table
     `);
     assertEquals(q.toString(), `
         XQL.from("my_table")
-          .select(F.distinct_on(c("a")), c("b"))
+          .select(c("a"), c("b"))
+          .distinct(c("a"))
+    `);
+});
+
+test("distinct on with no select", () => {
+    const q = XQL.from("my_table").distinct("a");
+    assertEquals(q.toSQL(), `
+        SELECT DISTINCT ON (a)
+          *
+        FROM
+          my_table
+    `);
+    assertEquals(q.toString(), `
+        XQL.from("my_table")
+          .distinct(c("a"))
     `);
 });
 

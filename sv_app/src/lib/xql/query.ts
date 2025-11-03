@@ -1,9 +1,9 @@
 import { format } from 'sql-formatter';
-import { Column, Expression, DistinctOnExpression } from './expressions.js';
+import { Column, Expression } from './expressions.js';
 import { col, lit } from './functions.js';
 
 type SelectOperation = { type: 'select'; columns: Expression[] };
-type DistinctOperation = { type: 'distinct' };
+type DistinctOperation = { type: 'distinct'; subset?: Expression[] };
 type FilterOperation = { type: 'filter'; expression: Expression };
 type GroupByOperation = { type: 'group_by'; columns: Expression[] };
 type AggOperation = { type: 'agg'; aggregations: Expression[] };
@@ -66,7 +66,11 @@ export class XQL {
         return this._newQuery({ type: 'select', columns: columnExpressions }, ['with_columns', 'group_by', 'agg']);
     }
 
-    distinct(): XQL {
+    distinct(...subset: (string | Expression)[]): XQL {
+        if (subset.length > 0) {
+            const columnExpressions = subset.map(c => (typeof c === 'string' ? col(c) : c));
+            return this._addOperation({ type: 'distinct', subset: columnExpressions });
+        }
         return this._addOperation({ type: 'distinct' });
     }
 
@@ -206,7 +210,11 @@ export class XQL {
                     jsString += `.select(${op.columns.map(c => c.toString()).join(', ')})`;
                     break;
                 case 'distinct':
-                    jsString += `.distinct()`;
+                    if (op.subset && op.subset.length > 0) {
+                        jsString += `.distinct(${op.subset.map(c => c.toString()).join(', ')})`;
+                    } else {
+                        jsString += `.distinct()`;
+                    }
                     break;
                 case 'with_columns':
                     jsString += `.with_columns(${op.columns.map(c => c.toString()).join(', ')})`;
@@ -273,17 +281,15 @@ export class XQL {
     }
 
     private _getSelectClause(): string {
-        const isDistinct = this._operations.some(op => op.type === 'distinct');
-        const distinctClause = isDistinct ? 'DISTINCT ' : '';
-
-        const selectOp = this._getEffectiveSelect();
-        const distinctOnExpr = selectOp?.columns.find(c => c instanceof DistinctOnExpression);
-
-        if (distinctOnExpr) {
-            const otherCols = selectOp.columns.filter(c => !(c instanceof DistinctOnExpression));
-            const distinctOnSql = distinctOnExpr.toSQL();
-            const otherColsSql = otherCols.map(c => c.toSQL()).join(', ');
-            return `${distinctOnSql} ${otherColsSql}`;
+        const distinctOp = this._operations.find(op => op.type === 'distinct') as DistinctOperation;
+        let distinctClause = '';
+        if (distinctOp) {
+            if (distinctOp.subset && distinctOp.subset.length > 0) {
+                const subsetCols = distinctOp.subset.map(c => c.toSQL()).join(', ');
+                distinctClause = `DISTINCT ON (${subsetCols}) `;
+            } else {
+                distinctClause = 'DISTINCT ';
+            }
         }
 
         const aggOp = this._operations.find(op => op.type === 'agg');
@@ -303,7 +309,7 @@ export class XQL {
             const replaceClause = replacements.length > 0 ? `REPLACE (${replacements.join(', ')})` : '';
             return `${distinctClause}* ${replaceClause}`;
         }
-
+        const selectOp = this._getEffectiveSelect();
         if (selectOp) {
             return `${distinctClause}${selectOp.columns.map(c => c.toSQL()).join(', ')}`;
         }
