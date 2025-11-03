@@ -1,6 +1,6 @@
 import type { StateHistory } from "runed";
 import type { TableHeader } from "./useQueryEngine.svelte";
-import { addCount, addGroupBy, addSelect } from "$lib/logic/actions";
+import { addCount, addDistinct, addGroupBy, addSelect } from "$lib/logic/actions";
 
 type ShortcutDependencies = {
     queryString: {
@@ -125,6 +125,13 @@ export function createShortcuts({ queryString, selectedColumns, selectedColumnNa
           label: "group count",
           action: () => {
               addGroupBy(queryString.get(), setQuery, selectedColumnNames.get());
+          },
+        },
+        {
+          key: "d",
+          label: "distinct",
+          action: () => {
+              addDistinct(queryString.get(), setQuery, selectedColumnNames.get());
           },
         },
         {

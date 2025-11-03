@@ -84,7 +84,7 @@ export class XQL {
     }
 
     agg(...aggregations: Expression[]): XQL {
-        return this._newQuery({ type: 'agg', aggregations }, ['agg', 'order_by']);
+        return this._newQuery({ type: 'agg', aggregations }, ['agg', 'order_by', 'distinct']);
     }
 
     order_by(...columns: (string | Expression)[]): XQL {

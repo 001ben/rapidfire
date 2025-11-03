@@ -815,4 +815,27 @@ test("distinct on with no select", () => {
     `);
 });
 
+test("distinct then agg", () => {
+    const q = XQL.from("penguins")
+        .distinct("species")
+        .agg(F.count('*').alias('count'));
+
+    assertEquals(q.toSQL(), `
+        SELECT
+          COUNT(*) AS count
+        FROM
+          (
+            SELECT DISTINCT ON (species)
+              *
+            FROM
+              penguins
+          ) AS t0
+    `);
+
+    assertEquals(q.toString(), `const t0 = XQL.from("penguins")
+  .distinct(c("species"));
+XQL.from(t0)
+  .agg(F.count(c("*")).alias("count"))`);
+});
+
 console.log("All tests passed!");
