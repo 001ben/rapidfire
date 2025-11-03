@@ -26,6 +26,17 @@ export function addSelect(currentQuery: string, setQuery: (q: string) => void, c
     setQuery(newQuery);
 }
 
+export function addDistinct(currentQuery: string, setQuery: (q: string) => void, columns: string[]) {
+    const colnames = columns.map(c => c.replaceAll('"', ''));
+    if (colnames.length === 0) {
+        const newQuery = `${currentQuery}\n.distinct()`;
+        setQuery(newQuery);
+    } else {
+        const newQuery = `${currentQuery}\n.distinct(${colnames.map(c => `"${c}"`).join(', ')})`;
+        setQuery(newQuery);
+    }
+}
+
 export function addCast(currentQuery: string, setQuery: (q: string) => void, column: string, dataType: string) {
     // This expression will overwrite the existing column with the newly casted one.
     const castExpr = `F.col("${column}").cast("${dataType.toUpperCase()}").alias("${column}")`;

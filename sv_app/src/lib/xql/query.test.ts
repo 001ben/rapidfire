@@ -769,4 +769,73 @@ test("agg after group_by, agg, and order_by", () => {
 });
 
 
+test("distinct", () => {
+    const q = XQL.from("my_table").select("a", "b").distinct();
+    assertEquals(q.toSQL(), `
+        SELECT DISTINCT
+          a,
+          b
+        FROM
+          my_table
+    `);
+    assertEquals(q.toString(), `
+        XQL.from("my_table")
+          .select(c("a"), c("b"))
+          .distinct()
+    `);
+});
+
+test("distinct on", () => {
+    const q = XQL.from("my_table").select("a", "b").distinct("a");
+    assertEquals(q.toSQL(), `
+        SELECT DISTINCT ON (a)
+          a,
+          b
+        FROM
+          my_table
+    `);
+    assertEquals(q.toString(), `
+        XQL.from("my_table")
+          .select(c("a"), c("b"))
+          .distinct(c("a"))
+    `);
+});
+
+test("distinct on with no select", () => {
+    const q = XQL.from("my_table").distinct("a");
+    assertEquals(q.toSQL(), `
+        SELECT DISTINCT ON (a)
+          *
+        FROM
+          my_table
+    `);
+    assertEquals(q.toString(), `
+        XQL.from("my_table")
+          .distinct(c("a"))
+    `);
+});
+
+test("distinct then agg", () => {
+    const q = XQL.from("penguins")
+        .distinct("species")
+        .agg(F.count('*').alias('count'));
+
+    assertEquals(q.toSQL(), `
+        SELECT
+          COUNT(*) AS count
+        FROM
+          (
+            SELECT DISTINCT ON (species)
+              *
+            FROM
+              penguins
+          ) AS t0
+    `);
+
+    assertEquals(q.toString(), `const t0 = XQL.from("penguins")
+  .distinct(c("species"));
+XQL.from(t0)
+  .agg(F.count(c("*")).alias("count"))`);
+});
+
 console.log("All tests passed!");
