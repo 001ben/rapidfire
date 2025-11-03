@@ -1,3 +1,7 @@
+export function addCount(currentQuery: string, setQuery: (q: string) => void) {
+    setQuery(`${currentQuery}\n.agg(F.count('*').alias('count'))`);
+}
+
 export function addGroupBy(currentQuery: string, setQuery: (q: string) => void, columns: string[]) {
     const colnames = columns.map(c => c.replaceAll('"', ''));
     if (colnames.length === 0) {
@@ -20,6 +24,17 @@ export function addSelect(currentQuery: string, setQuery: (q: string) => void, c
     }
     const newQuery = `${currentQuery}\n.select(${colnames.map(c => `"${c}"`).join(', ')})`;
     setQuery(newQuery);
+}
+
+export function addDistinct(currentQuery: string, setQuery: (q: string) => void, columns: string[]) {
+    const colnames = columns.map(c => c.replaceAll('"', ''));
+    if (colnames.length === 0) {
+        const newQuery = `${currentQuery}\n.distinct()`;
+        setQuery(newQuery);
+    } else {
+        const newQuery = `${currentQuery}\n.distinct(${colnames.map(c => `"${c}"`).join(', ')})`;
+        setQuery(newQuery);
+    }
 }
 
 export function addCast(currentQuery: string, setQuery: (q: string) => void, column: string, dataType: string) {

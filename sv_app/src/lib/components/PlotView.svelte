@@ -75,7 +75,7 @@
         bind:this={plotContainer} 
         bind:clientWidth={plot_width}
         bind:clientHeight={plot_height}
-        class="flex-grow rounded-lg shadow-md border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-800 p-4 overflow-auto"
+        class="grow rounded-lg shadow-md bg-white dark:bg-vscode-background p-4 overflow-auto"
     >
         <!-- Plot will be rendered here -->
     </div>

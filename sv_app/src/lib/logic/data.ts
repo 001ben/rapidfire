@@ -1,16 +1,17 @@
+import type { Dataset } from "$lib/logic/types";
 
 const MOSAIC_DATA_URL =
   "https://raw.githubusercontent.com/uwdata/mosaic/main/data/";
 
 export const exampleDatasets: Dataset[] = [
   {
-    name: "pokemon",
-    url: "https://gist.githubusercontent.com/armgilles/194bcff35001e7eb53a2a8b441e8b2c6/raw/92200bc0a673d5ce2110aaad4544ed6c4010f687/pokemon.csv",
+    name: "penguins",
+    url: "https://raw.githubusercontent.com/allisonhorst/palmerpenguins/main/inst/extdata/penguins.csv",
     type: "csv",
   },
   {
-    name: "penguins",
-    url: "https://raw.githubusercontent.com/allisonhorst/palmerpenguins/main/inst/extdata/penguins.csv",
+    name: "pokemon",
+    url: "https://gist.githubusercontent.com/armgilles/194bcff35001e7eb53a2a8b441e8b2c6/raw/92200bc0a673d5ce2110aaad4544ed6c4010f687/pokemon.csv",
     type: "csv",
   },
   { name: "athletes", url: `${MOSAIC_DATA_URL}athletes.csv`, type: "csv" },
@@ -24,6 +25,12 @@ export const exampleDatasets: Dataset[] = [
     url: "https://pub-1da360b43ceb401c809f68ca37c7f8a4.r2.dev/data/observable-latency.parquet",
     type: "parquet",
   },
+  // Can't link to google drive files directly due to CORS
+  // {
+  //   name: "lol25",
+  //   url: "https://drive.google.com/uc?export=download&id=1v6LRphp2kYciU4SXp0PCjEMuev1bDejc",
+  //   type: "csv",
+  // }
 ];
 
 export async function import_vg_aq() {
@@ -32,23 +39,18 @@ export async function import_vg_aq() {
   return {vg, aq};
 }
 
-// Define the shape of the dataset object
-export interface Dataset {
-  name: string;
-  url: string;
-  type: "csv" | "parquet";
-}
-
 export class DataManager {
   vg: any;
   aq: any;
+  duckdb: any;
   
   private static instance: DataManager | null = null;
   private static creationPromise: Promise<DataManager> | null = null;
 
-  private constructor(vg: any, aq: any) {
+  private constructor(vg: any, aq: any, duckdb: any) {
     this.vg = vg;
     this.aq = aq;
+    this.duckdb = duckdb;
     console.log("DataManager instance created.");
   }
 
@@ -66,9 +68,10 @@ export class DataManager {
       try {
         const { vg, aq } = await import_vg_aq();
         vg.coordinator().databaseConnector(vg.wasmConnector());
+        const duckdb = await vg.coordinator().manager.db.getDuckDB();
 
         // Create the instance and store it
-        const newInstance = new DataManager(vg, aq);
+        const newInstance = new DataManager(vg, aq, duckdb);
         DataManager.instance = newInstance;
         
         // Clear the promise holder
@@ -118,6 +121,28 @@ export class DataManager {
       return {name, url, type};
   }
 
+  async rawQuery(query: string, send: boolean = false) {
+    const dbConn = await this.duckdb.connect();
+    try {
+      if (send) {
+        return await dbConn.send(query);
+      } else {
+        return await dbConn.query(query);
+      }
+    } finally {
+      dbConn.close();
+    }
+  }
+
+  async showTables() {
+    const result = await this.rawQuery("show all tables")
+    return result.toArray().map((x:any) => x.toJSON().name);
+  }
+
+  async registerFileBuffer(name: string, buffer: ArrayBuffer) {
+    return await this.duckdb.registerFileBuffer(name, new Uint8Array(buffer));
+  }
+  
   async exec(query: string) {
     return this.vg.coordinator().exec(query);
   }

@@ -17,8 +17,9 @@
   import type { TableHeader } from '$lib/logic/types';
   import { onMount } from "svelte";
 
-  import type {Dataset} from '$lib/logic/data'
-  import {DataManager, exampleDatasets} from "$lib/logic/data";
+  import type { Dataset } from "$lib/logic/types";
+  import {exampleDatasets} from "$lib/logic/data";
+  import DatasetSelector from "$lib/components/DatasetSelector.svelte";
 
   const initialDataset = exampleDatasets[0];
 
@@ -28,7 +29,7 @@
   let viewMode : 'table' | 'plot' = $state('table');
   let viewName = $state('');
   let plotSpec = $state('');
-  let customUrl = $state("");
+
   // let editorHeight = $state(224); // Default height in pixels (h-56)
 
   let tableScrollContainer = $state<HTMLElement | undefined>(undefined);
@@ -77,7 +78,7 @@
   }
 
   // You should have a similar one for the URL loader
-  async function handleLoadUrl() {
+  async function handleLoadUrl(customUrl: string) {
     if (!queryEngine || !customUrl) return; // (assuming ui from useUIState)
     try {
       queryEngine.isLoadingQuery = true;
@@ -86,6 +87,58 @@
         queryEngine.resetQuery(newQuery);
       }
     } catch (e) {
+      queryEngine.queryError = e instanceof Error ? e.message : String(e);
+    } finally {
+      queryEngine.isLoadingQuery = false;
+    }
+  }
+
+  async function handleLoadFile(file: File, arrayBuffer: ArrayBuffer) {
+    if (!queryEngine) return; // (assuming ui from useUIState)
+    try {
+      queryEngine.isLoadingQuery = true;
+      const { cleanName, extension } = {
+        cleanName: file.name.substring(0, file.name.lastIndexOf(".")),
+        extension: file.name.substring(file.name.lastIndexOf(".")+1)
+      };
+      let tableName = cleanName;
+      // DuckDB unquoted identifiers cannot start with a number or special character.
+      // Prepend an underscore if the first character is not a letter.
+      if (!/^[a-zA-Z]/.test(tableName)) {
+        tableName = '_' + tableName;
+      }
+      const tableNames = await db.instance.showTables();
+      if(tableNames.includes(tableName)) {
+        let i = 1;
+        while(tableNames.includes(tableName + i)) {
+          i++;
+        }
+        tableName = tableName + i;
+      }
+      await db.instance.registerFileBuffer(file.name, arrayBuffer);
+      console.log({table_names: tableNames, new_table_name: tableName, filename: file.name, extension: extension});
+      switch(extension) {
+        case 'csv':
+          await db.instance.rawQuery(`CREATE TABLE ${tableName} as select * from read_csv('${file.name}')`, true);
+          break;
+        case 'xlsx':
+          await db.instance.rawQuery(`CREATE TABLE ${tableName} as select * from read_xlsx('${file.name}', header = true)`, true);
+          break;
+        case 'parquet':
+          await db.instance.rawQuery(`CREATE TABLE ${tableName} as select * from read_parquet('${file.name}')`, true);
+          break;
+        default:
+          addNotification({
+            text: `Unsupported file type: ${extension}`,
+            position: 'bottom-right',
+            type: "error",
+            removeAfter: 3000,
+          })
+          return;
+      }
+      queryEngine.resetQuery(`return XQL.from('${tableName}')`);
+    } catch (e) {
+      console.error(e);
       queryEngine.queryError = e instanceof Error ? e.message : String(e);
     } finally {
       queryEngine.isLoadingQuery = false;
@@ -104,7 +157,7 @@
       await db.instance.clear({clients: false, cache: true})
     },
     queryHistory: queryEngine.queryHistory,
-    reset: () => queryEngine.resetQuery(`XQL.from('${initialDataset.name}')`),
+    reset: () => queryEngine.resetQuery(`return XQL.from('${initialDataset.name}')`),
     setQuery: queryEngine.setQuery,
     currentViewMode: () => viewMode,
     setViewMode: (mode) => viewMode = mode,
@@ -162,7 +215,7 @@
   </div>
 {:else}
   <div class="bg-slate-100 text-slate-800 dark:bg-vscode-background dark:text-vscode-foreground flex flex-col h-screen p-4 md:p-6 lg:p-8 box-border">
-    <header class="mb-4 flex-shrink-0">
+    <header class="mb-4 shrink-0">
       <div class="flex justify-between items-center">
         <h1 class="text-3xl font-bold text-slate-900 dark:text-vscode-gray-100 flex items-center">
           Interactive Data Explorer
@@ -193,51 +246,27 @@
             </div>
           </div>
         </h1>
-        <div class="flex items-center gap-4">
-          <div class="flex items-center gap-2 flex-wrap">
-            <span class="text-sm font-medium text-slate-600 dark:text-vscode-gray-200"
-            >Load example:</span>
-            {#each exampleDatasets as dataset}
-              <button
-                class="px-2 py-1 text-xs font-semibold rounded-md bg-slate-200 hover:bg-slate-300 dark:bg-vscode-gray-400 dark:hover:bg-vscode-gray-300 transition-colors"
-                onclick={async () => { handleLoadExample(dataset) } }
-                >
-                {dataset.name}
-              </button>
-            {/each}
-          </div>
-          <div class="max-w-sm flex-grow">
-            <div class="flex items-center gap-2">
-              <input
-                type="text"
-                bind:value={customUrl}
-                onkeydown={async (e) => e.key === 'Enter' && handleLoadUrl()}
-                placeholder="Or load from URL..."
-                class="w-48 px-3 py-1.5 text-sm rounded-md bg-white dark:bg-vscode-background border border-slate-300 dark:border-vscode-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              />
-              <button
-                class="px-4 py-1.5 text-sm font-semibold rounded-md bg-blue-500 text-white hover:bg-blue-600 disabled:bg-slate-400 dark:disabled:bg-vscode-gray-400"
-                onclick={handleLoadUrl}
-                disabled={!customUrl || db.isLoading}>Load</button
-              >
-            </div>
-          </div>
-        </div>
+        <DatasetSelector {handleLoadUrl} {handleLoadExample} {handleLoadFile} isLoading={queryEngine.isLoadingQuery} />
       </div>
       <p class="text-slate-600 dark:text-vscode-gray-200 mt-1">
         Edit code to transform the data. Click a cell for <code class="bg-slate-200 dark:bg-vscode-gray-400 px-1 rounded">filter</code>, or click headers to select columns.
       </p>
     </header>
 
-    <div class="flex-grow flex gap-2 min-h-0">
+    <div class="grow flex gap-2 min-h-0">
       <!-- Main Content -->
-      <main class="flex-grow flex flex-col min-h-0 min-w-0">
+      <main class="grow flex flex-col min-h-0 min-w-0">
         {#if viewMode === 'table'}
           <CollapsibleEditor>
             {#snippet top()}
               <EditorPanel bind:queryString={queryEngine.queryString} sqlQuery={queryEngine.sqlQuery} />
             {/snippet}
             {#snippet bottom()}
+              {#if queryEngine.queryError}
+              <div class="p-4 bg-red-100 text-red-800 h-4 flex items-center justify-center">
+                <strong>Query Error:</strong> {queryEngine.queryError}
+              </div>
+              {/if}
               <DataTable
                 tableData={queryEngine.tableData}
                 bind:tableHeaders={queryEngine.tableHeaders}

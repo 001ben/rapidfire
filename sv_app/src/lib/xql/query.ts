@@ -1,114 +1,119 @@
 import { format } from 'sql-formatter';
-import { Column, Expression, quoteIfNeeded } from './expressions.js';
+import { Column, Expression } from './expressions.js';
 import { col, lit } from './functions.js';
 
+type SelectOperation = { type: 'select'; columns: Expression[] };
+type DistinctOperation = { type: 'distinct'; subset?: Expression[] };
+type FilterOperation = { type: 'filter'; expression: Expression };
+type GroupByOperation = { type: 'group_by'; columns: Expression[] };
+type AggOperation = { type: 'agg'; aggregations: Expression[] };
+type OrderByOperation = { type: 'order_by'; columns: Expression[] };
+type WithColumnsOperation = { type: 'with_columns'; columns: Expression[] };
+type JoinOperation = { type: 'join'; other: XQL; on: Expression; how: string };
+type LimitOperation = { type: 'limit'; n: number };
+type OffsetOperation = { type: 'offset'; n: number };
+
+type Operation =
+    | SelectOperation
+    | DistinctOperation
+    | FilterOperation
+    | GroupByOperation
+    | AggOperation
+    | OrderByOperation
+    | WithColumnsOperation
+    | JoinOperation
+    | LimitOperation
+    | OffsetOperation;
+
 export class XQL {
-    constructor(source = null) {
+    private _source: XQL | string | null;
+    private _operations: Operation[];
+
+    constructor(source: XQL | string | null = null) {
         this._source = source;
         this._operations = [];
     }
 
-    static from(source) {
+    static from(source: XQL | string): XQL {
         return new XQL(source);
     }
 
-    static select(...columns) {
+    static select(...columns: (string | number | Expression)[]): XQL {
         const q = new XQL();
         return q.select(...columns);
     }
-
-    select(...columns) {
-        const hasFinalizingOp = this._operations.some(op =>
-            ['with_columns', 'group_by', 'agg'].includes(op.type)
-        );
-
+    
+    private _newQuery(op: Operation, subqueryOps: string[]): XQL {
+        const hasFinalizingOp = this._operations.some(op => subqueryOps.includes(op.type));
         if (hasFinalizingOp) {
-            const newQuery = new XQL(this);
-            return newQuery.select(...columns);
-        } else {
-            const newQuery = this._clone();
-            const columnExpressions = columns.map(c => {
-                if (c instanceof Expression) return c;
-                if (typeof c === 'string') return col(c);
-                return lit(c);
-            });
-            newQuery._operations.push({ type: 'select', columns: columnExpressions });
-            return newQuery;
+            return new XQL(this)._addOperation(op);
         }
+        return this._addOperation(op);
     }
 
-    filter(expression) {
+    private _addOperation(op: Operation): XQL {
         const newQuery = this._clone();
-        newQuery._operations.push({ type: 'filter', expression });
+        newQuery._operations.push(op);
         return newQuery;
     }
 
-    group_by(...columns) {
-        const hasExistingAggregation = this._operations.some(op => op.type === 'group_by' || op.type === 'agg');
+    select(...columns: (string | number | Expression)[]): XQL {
+        const columnExpressions = columns.map(c => {
+            if (c instanceof Expression) return c;
+            if (typeof c === 'string') return col(c);
+            return lit(c);
+        });
+        return this._newQuery({ type: 'select', columns: columnExpressions }, ['with_columns', 'group_by', 'agg']);
+    }
 
-        if (hasExistingAggregation) {
-            const newQuery = new XQL(this);
-            return newQuery.group_by(...columns);
-        } else {
-            const newQuery = this._clone();
-            const columnExpressions = columns.map(c => typeof c === 'string' ? col(c) : c);
-            newQuery._operations.push({ type: 'group_by', columns: columnExpressions });
-            return newQuery;
+    distinct(...subset: (string | Expression)[]): XQL {
+        if (subset.length > 0) {
+            const columnExpressions = subset.map(c => (typeof c === 'string' ? col(c) : c));
+            return this._addOperation({ type: 'distinct', subset: columnExpressions });
         }
+        return this._addOperation({ type: 'distinct' });
     }
 
-    agg(...aggregations) {
-        const newQuery = this._clone();
-        newQuery._operations.push({ type: 'agg', aggregations });
-        return newQuery;
+    filter(expression: Expression): XQL {
+        return this._addOperation({ type: 'filter', expression });
     }
 
-    order_by(...columns) {
-        const newQuery = this._clone();
-        const columnExpressions = columns.map(c => typeof c === 'string' ? col(c) : c);
-        newQuery._operations.push({ type: 'order_by', columns: columnExpressions });
-        return newQuery;
+    group_by(...columns: (string | Expression)[]): XQL {
+        const columnExpressions = columns.map(c => (typeof c === 'string' ? col(c) : c));
+        return this._newQuery({ type: 'group_by', columns: columnExpressions }, ['group_by', 'agg', 'order_by']);
     }
 
-    with_columns(...columns) {
-        const hasFinalizingOp = this._operations.some(op =>
-            ['select', 'with_columns', 'group_by', 'agg'].includes(op.type)
-        );
-
-        if (hasFinalizingOp) {
-            const newQuery = new XQL(this);
-            return newQuery.with_columns(...columns);
-        } else {
-            const newQuery = this._clone();
-            const columnExpressions = columns.map(c => {
-                if (c instanceof Expression) return c;
-                if (typeof c === 'string') return col(c);
-                return lit(c);
-            });
-            newQuery._operations.push({ type: 'with_columns', columns: columnExpressions });
-            return newQuery;
-        }
+    agg(...aggregations: Expression[]): XQL {
+        return this._newQuery({ type: 'agg', aggregations }, ['agg', 'order_by', 'distinct']);
     }
 
-    join(other, on, how = 'inner') {
-        const newQuery = this._clone();
-        newQuery._operations.push({ type: 'join', other, on, how });
-        return newQuery;
+    order_by(...columns: (string | Expression)[]): XQL {
+        const columnExpressions = columns.map(c => (typeof c === 'string' ? col(c) : c));
+        return this._addOperation({ type: 'order_by', columns: columnExpressions });
     }
 
-    limit(n) {
-        const newQuery = this._clone();
-        newQuery._operations.push({ type: 'limit', n });
-        return newQuery;
+    with_columns(...columns: (string | Expression)[]): XQL {
+        const columnExpressions = columns.map(c => {
+            if (c instanceof Expression) return c;
+            if (typeof c === 'string') return col(c);
+            return lit(c);
+        });
+        return this._newQuery({ type: 'with_columns', columns: columnExpressions }, ['select', 'with_columns', 'group_by', 'agg']);
     }
 
-    offset(n) {
-        const newQuery = this._clone();
-        newQuery._operations.push({ type: 'offset', n });
-        return newQuery;
+    join(other: XQL, on: Expression, how = 'inner'): XQL {
+        return this._addOperation({ type: 'join', other, on, how });
     }
 
-    toSQL(isSubquery = false, aliasCounter = { count: 0 }) {
+    limit(n: number): XQL {
+        return this._addOperation({ type: 'limit', n });
+    }
+
+    offset(n: number): XQL {
+        return this._addOperation({ type: 'offset', n });
+    }
+
+    toSQL(isSubquery = false, aliasCounter = { count: 0 }): string {
         const fromClause = this._getFromClause(aliasCounter);
         const whereClause = this._getWhereClause();
         const group_byClause = this._getgroup_byClause();
@@ -131,13 +136,13 @@ export class XQL {
     }
 
     toString() {
-        const setup = [];
+        const setup: string[] = [];
         const main = this._toString(setup);
         return (setup.length ? setup.join('\n') + '\n' : '') + main;
     }
 
-    _getEffectiveSelect() {
-        const selectOps = this._operations.filter(op => op.type === 'select');
+    private _getEffectiveSelect(): SelectOperation | null {
+        const selectOps = this._operations.filter(op => op.type === 'select') as SelectOperation[];
         if (selectOps.length === 0) return null;
 
         let lastNonWildcardSelect = null;
@@ -160,7 +165,7 @@ export class XQL {
         return selectOps[0];
     }
 
-    _toString(setup, indent = 0) {
+    private _toString(setup: string[], indent = 0): string {
         const indentStr = '  '.repeat(indent);
         const nextIndentStr = '  '.repeat(indent + 1);
 
@@ -189,9 +194,13 @@ export class XQL {
                 jsString = `${indentStr}XQL.from(${varName})`;
             }
         } else {
-            const selectOp = ops[0];
-            jsString = `${indentStr}XQL.select(${selectOp.columns.map(c => c.toString()).join(', ')})`;
-            ops = ops.slice(1);
+            const firstOp = ops[0];
+            if (firstOp?.type === 'select') {
+                jsString = `${indentStr}XQL.select(${firstOp.columns.map(c => c.toString()).join(', ')})`;
+                ops = ops.slice(1);
+            } else {
+                throw new Error("A query without a source must begin with 'select'.");
+            }
         }
 
         for (const op of ops) {
@@ -199,6 +208,13 @@ export class XQL {
             switch (op.type) {
                 case 'select':
                     jsString += `.select(${op.columns.map(c => c.toString()).join(', ')})`;
+                    break;
+                case 'distinct':
+                    if (op.subset && op.subset.length > 0) {
+                        jsString += `.distinct(${op.subset.map(c => c.toString()).join(', ')})`;
+                    } else {
+                        jsString += `.distinct()`;
+                    }
                     break;
                 case 'with_columns':
                     jsString += `.with_columns(${op.columns.map(c => c.toString()).join(', ')})`;
@@ -231,16 +247,16 @@ export class XQL {
         return jsString;
     }
 
-    _clone() {
+    private _clone(): XQL {
         const newQuery = new XQL(this._source);
         newQuery._operations = [...this._operations];
         return newQuery;
     }
 
-    _getFromClause(aliasCounter) {
+    private _getFromClause(aliasCounter: { count: number }): string {
         if (!this._source) return '';
 
-        const getSourceName = (source) => {
+        const getSourceName = (source: XQL | string) => {
             if (typeof source === 'string') {
                 return source;
             }
@@ -249,7 +265,7 @@ export class XQL {
             }
 
             const alias = `t${aliasCounter.count++}`;
-            const subQuerySql = source.toSQL(true, aliasCounter).split('\n').map(line => '  ' + line).join('\n');
+            const subQuerySql = source.toSQL(true, aliasCounter).split('\n').map((line: string) => '  ' + line).join('\n');
             return `(\n${subQuerySql}\n) AS ${alias}`;
         };
 
@@ -264,67 +280,68 @@ export class XQL {
         return fromClause;
     }
 
-    _getSelectClause() {
+    private _getSelectClause(): string {
+        const distinctOp = this._operations.find(op => op.type === 'distinct') as DistinctOperation;
+        let distinctClause = '';
+        if (distinctOp) {
+            if (distinctOp.subset && distinctOp.subset.length > 0) {
+                const subsetCols = distinctOp.subset.map(c => c.toSQL()).join(', ');
+                distinctClause = `DISTINCT ON (${subsetCols}) `;
+            } else {
+                distinctClause = 'DISTINCT ';
+            }
+        }
+
         const aggOp = this._operations.find(op => op.type === 'agg');
         if (aggOp) {
             const group_byOp = this._operations.find(op => op.type === 'group_by');
             const group_byCols = group_byOp ? group_byOp.columns.map(c => c.toSQL()) : [];
             const aggCols = aggOp.aggregations.map(a => a.toSQL());
-            return [...group_byCols, ...aggCols].join(', ');
+            return `${distinctClause}${ [...group_byCols, ...aggCols].join(', ')}`;
         }
 
         const withColsOp = this._operations.find(op => op.type === 'with_columns');
         if (withColsOp) {
-            // For `with_columns`, we assume any aliased expression is either a new column
-            // or is intended to overwrite an existing one.
-            // We can partition them into columns to add and columns to replace.
-            // However, without knowing the source schema, it's hard to know if an alias
-            // is a new column or an overwrite.
-            // DuckDB's `REPLACE` is perfect for overwrites, and `SELECT *, ...` for new columns.
-            // A simple and effective strategy is to treat all aliased columns in `with_columns`
-            // as replacements. This aligns with the Polars API's intent.
-
             const replacements = withColsOp.columns
                 .filter(c => c._alias)
-                .map(c => c.toSQL()); // c.toSQL() will be like `(a + 1) AS "a"`
+                .map(c => c.toSQL());
 
             const replaceClause = replacements.length > 0 ? `REPLACE (${replacements.join(', ')})` : '';
-
-            return `* ${replaceClause}`;
+            return `${distinctClause}* ${replaceClause}`;
         }
         const selectOp = this._getEffectiveSelect();
         if (selectOp) {
-            return selectOp.columns.map(c => c.toSQL()).join(', ');
+            return `${distinctClause}${selectOp.columns.map(c => c.toSQL()).join(', ')}`;
         }
-        return '*';
+        return `${distinctClause}*`;
     }
 
-    _getWhereClause() {
+    private _getWhereClause(): string | null {
         const filterOps = this._operations.filter(op => op.type === 'filter');
         if (filterOps.length === 0) return null;
         const conditions = filterOps.map(op => op.expression.toSQL()).join(' AND ');
         return `WHERE ${conditions}`;
     }
 
-    _getgroup_byClause() {
+    private _getgroup_byClause(): string | null {
         const group_byOp = this._operations.find(op => op.type === 'group_by');
         if (!group_byOp) return null;
         return `GROUP BY ${group_byOp.columns.map(c => c.toSQL()).join(', ')}`;
     }
 
-    _getorder_byClause() {
-        const order_byOp = this._operations.find(op => op.type === 'order_by');
+    private _getorder_byClause(): string | null {
+        const order_byOp = this._operations.findLast(op => op.type === 'order_by');
         if (!order_byOp) return null;
         return `ORDER BY ${order_byOp.columns.map(c => c.toSQL()).join(', ')}`;
     }
 
-    _getLimitClause() {
+    private _getLimitClause(): string | null {
         const limitOp = this._operations.find(op => op.type === 'limit');
         if (!limitOp) return null;
         return `LIMIT ${limitOp.n}`;
     }
 
-    _getOffsetClause() {
+    private _getOffsetClause(): string | null {
         const offsetOp = this._operations.find(op => op.type === 'offset');
         if (!offsetOp) return null;
         return `OFFSET ${offsetOp.n}`;
