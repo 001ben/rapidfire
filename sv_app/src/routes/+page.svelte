@@ -5,184 +5,57 @@
   import DataTable from "$lib/components/DataTable.svelte";
   import EditorPanel from "$lib/components/EditorPanel.svelte";
   import PlotView from "$lib/components/PlotView.svelte";
-  import { addCast, addSort } from "$lib/logic/actions";
-  import { createShortcuts } from "$lib/logic/shortcuts";
+  import { addCast, addSort } from '$lib/logic/actions';
   import { getNotificationsContext } from 'svelte-notifications';
-  import { useDatabase } from '$lib/logic/useDatabase.svelte';
-  import { useQueryEngine } from '$lib/logic/useQueryEngine.svelte';
-  import { getDefaultPlotSpec } from "$lib/logic/shortcuts";
+  import { getDefaultPlotSpec } from '$lib/logic/plots';
   const { addNotification } = getNotificationsContext();
   import CollapsibleEditor from "$lib/components/CollapsibleEditor.svelte";
+  import { useDataExplorer } from "$lib/logic/useDataExplorer.svelte";
 
   import type { TableHeader } from '$lib/logic/types';
   import { onMount } from "svelte";
 
-  import type { Dataset } from "$lib/logic/types";
-  import {exampleDatasets} from "$lib/logic/data";
+  import { ShortcutsManager } from '$lib/logic/shortcuts';
   import DatasetSelector from "$lib/components/DatasetSelector.svelte";
 
-  const initialDataset = exampleDatasets[0];
+  const data = useDataExplorer();
 
-  const db = useDatabase(initialDataset);
-  const queryEngine = useQueryEngine();
+  const view = $state({
+    mode: 'table' as 'table' | 'plot',
+    plotSpec: '',
+    viewName: ''
+  });
 
-  let viewMode : 'table' | 'plot' = $state('table');
-  let viewName = $state('');
-  let plotSpec = $state('');
+  const shortcutManager = new ShortcutsManager(data, view);
+  const shortcuts = shortcutManager.shortcuts;
 
   // let editorHeight = $state(224); // Default height in pixels (h-56)
 
   let tableScrollContainer = $state<HTMLElement | undefined>(undefined);
-  
   $effect(() => {
-    queryEngine.setScrollContainer(tableScrollContainer);
+    data.setScrollContainer(tableScrollContainer);
   });
 
   onMount(async () => {
-      // Initialize the database
-    const initialQuery = await db.initialise();
-    if (initialQuery && db.instance) {
-      queryEngine.setDb(db.instance, initialQuery);
-    }
-  });
-
-  function onkeydown(event: KeyboardEvent): void {
-    if (
-      event.target &&
-      (event.target as HTMLElement).className === "cm-content"
-    ) {
-      return;
-    }
-    const shortcut = shortcuts.find((sc) => sc.key === event.key);
-    if (shortcut) {
-      event.preventDefault();
-      shortcut.action();
-    }
-  }
-
-  async function handleLoadExample(dataset: Dataset) {
-    if (!queryEngine) return;
-
-    try {
-      queryEngine.isLoadingQuery = true;
-      const newQuery = await db.importDataset(dataset);
-      if (newQuery) {
-        queryEngine.resetQuery(newQuery);
-      }
-    } catch (e) {
-      // Set the error on the queryEngine so the UI can display it
-      queryEngine.queryError = e instanceof Error ? e.message : String(e);
-    } finally {
-      queryEngine.isLoadingQuery = false;
-    }
-  }
-
-  // You should have a similar one for the URL loader
-  async function handleLoadUrl(customUrl: string) {
-    if (!queryEngine || !customUrl) return; // (assuming ui from useUIState)
-    try {
-      queryEngine.isLoadingQuery = true;
-      const newQuery = await db.loadCustomUrl(customUrl);
-      if (newQuery) {
-        queryEngine.resetQuery(newQuery);
-      }
-    } catch (e) {
-      queryEngine.queryError = e instanceof Error ? e.message : String(e);
-    } finally {
-      queryEngine.isLoadingQuery = false;
-    }
-  }
-
-  async function handleLoadFile(file: File, arrayBuffer: ArrayBuffer) {
-    if (!queryEngine) return; // (assuming ui from useUIState)
-    try {
-      queryEngine.isLoadingQuery = true;
-      const { cleanName, extension } = {
-        cleanName: file.name.substring(0, file.name.lastIndexOf(".")),
-        extension: file.name.substring(file.name.lastIndexOf(".")+1)
-      };
-      let tableName = cleanName;
-      // DuckDB unquoted identifiers cannot start with a number or special character.
-      // Prepend an underscore if the first character is not a letter.
-      if (!/^[a-zA-Z]/.test(tableName)) {
-        tableName = '_' + tableName;
-      }
-      const tableNames = await db.instance.showTables();
-      if(tableNames.includes(tableName)) {
-        let i = 1;
-        while(tableNames.includes(tableName + i)) {
-          i++;
-        }
-        tableName = tableName + i;
-      }
-      await db.instance.registerFileBuffer(file.name, arrayBuffer);
-      console.log({table_names: tableNames, new_table_name: tableName, filename: file.name, extension: extension});
-      switch(extension) {
-        case 'csv':
-          await db.instance.rawQuery(`CREATE TABLE ${tableName} as select * from read_csv('${file.name}')`, true);
-          break;
-        case 'xlsx':
-          await db.instance.rawQuery(`CREATE TABLE ${tableName} as select * from read_xlsx('${file.name}', header = true)`, true);
-          break;
-        case 'parquet':
-          await db.instance.rawQuery(`CREATE TABLE ${tableName} as select * from read_parquet('${file.name}')`, true);
-          break;
-        default:
-          addNotification({
-            text: `Unsupported file type: ${extension}`,
-            position: 'bottom-right',
-            type: "error",
-            removeAfter: 3000,
-          })
-          return;
-      }
-      queryEngine.resetQuery(`return XQL.from('${tableName}')`);
-    } catch (e) {
-      console.error(e);
-      queryEngine.queryError = e instanceof Error ? e.message : String(e);
-    } finally {
-      queryEngine.isLoadingQuery = false;
-    }
-  }
-
-  const shortcuts = createShortcuts({
-    queryString: { get: () => queryEngine.queryString },
-    selectedColumns: { get: () => queryEngine.selectedColumns },
-    selectedColumnNames: { get: () => queryEngine.selectedColumnNames },
-    colorColumn: { get: () => queryEngine.colorColumn },
-    currentTableName: () => initialDataset.name,
-    createViewCurrentQuery: async () => {
-      console.log("creating view ", `CREATE OR REPLACE VIEW ${initialDataset.name}_view AS ${queryEngine.query.toSQL()}`);
-      await db.instance.exec(`CREATE OR REPLACE VIEW ${initialDataset.name}_view AS ${queryEngine.query.toSQL()}`);
-      await db.instance.clear({clients: false, cache: true})
-    },
-    queryHistory: queryEngine.queryHistory,
-    reset: () => queryEngine.resetQuery(`return XQL.from('${initialDataset.name}')`),
-    setQuery: queryEngine.setQuery,
-    currentViewMode: () => viewMode,
-    setViewMode: (mode) => viewMode = mode,
-    setPlotSpec: (spec, setViewName) => {
-      plotSpec = spec;
-      viewName = setViewName;
-    },
+    data.initialise();
   });
 
   const items = [
     {
       label: "Cast",
       children: [
-        { label: "to String", action: (header: TableHeader) => { addCast(queryEngine.queryString, queryEngine.setQuery, header.name, "VARCHAR"); } },
-        { label: "to Integer", action: (header: TableHeader) => { addCast(queryEngine.queryString, queryEngine.setQuery, header.name, "INTEGER"); } },
-        { label: "to Float", action: (header: TableHeader) => { addCast(queryEngine.queryString, queryEngine.setQuery, header.name, "FLOAT"); } },
-        { label: "to Decimal", action: (header: TableHeader) => { addCast(queryEngine.queryString, queryEngine.setQuery, header.name, "DECIMAL"); } },
-        { label: "to Date", action: (header: TableHeader) => { addCast(queryEngine.queryString, queryEngine.setQuery, header.name, "DATE"); } },
+        { label: "to String", action: (header: TableHeader) => { addCast(data.queryString, data.setQuery, header.name, "VARCHAR"); } },
+        { label: "to Integer", action: (header: TableHeader) => { addCast(data.queryString, data.setQuery, header.name, "INTEGER"); } },
+        { label: "to Float", action: (header: TableHeader) => { addCast(data.queryString, data.setQuery, header.name, "FLOAT"); } },
+        { label: "to Decimal", action: (header: TableHeader) => { addCast(data.queryString, data.setQuery, header.name, "DECIMAL"); } },
+        { label: "to Date", action: (header: TableHeader) => { addCast(data.queryString, data.setQuery, header.name, "DATE"); } },
       ],
     },
     {
       label: "Sort",
       children: [
-        { label: "Ascending", action: (header: TableHeader) => { addSort(queryEngine.queryString, queryEngine.setQuery, header.name, 'asc'); } },
-        { label: "Descending", action: (header: TableHeader) => { addSort(queryEngine.queryString, queryEngine.setQuery, header.name, 'desc'); } },
+        { label: "Ascending", action: (header: TableHeader) => { addSort(data.queryString, data.setQuery, header.name, 'asc'); } },
+        { label: "Descending", action: (header: TableHeader) => { addSort(data.queryString, data.setQuery, header.name, 'desc'); } },
       ],
     },
     {
@@ -204,12 +77,11 @@
   ];
 </script>
 
-<svelte:window {onkeydown} />
-{#if db.dbError}
+{#if data.dbError}
   <div class="p-4 bg-red-100 text-red-800 h-screen flex items-center justify-center">
-    <strong>Fatal Error:</strong> Could not load database. {db.dbError}
+    <strong>Fatal Error:</strong> Could not load database. {data.dbError}
   </div>
-{:else if !db.isDbReady}
+{:else if !data.isDbReady}
   <div class="p-4 text-center h-screen flex items-center justify-center">
     <p class="text-2xl text-slate-500">Initializing Database...</p>
   </div>
@@ -225,28 +97,32 @@
             <div class="flex items-center gap-1 p-1 rounded-lg bg-slate-200 dark:bg-vscode-background">
                 <button 
                     class={["px-3 py-1 text-sm font-semibold rounded-md transition-colors", {
-                        'bg-white': viewMode === 'table',
-                        'dark:bg-vscode-blue': viewMode === 'table'
+                        'bg-white': view.mode === 'table',
+                        'dark:bg-vscode-blue': view.mode === 'table'
                     }]}
-                    onclick={() => viewMode = 'table'}
+                    onclick={() => view.mode = 'table'}
                 >Table</button>
                 <button 
                     class={["px-3 py-1 text-sm font-semibold rounded-md transition-colors", {
-                        'bg-white': viewMode === 'plot',
-                        'dark:bg-vscode-blue': viewMode === 'plot'
+                        'bg-white': view.mode === 'plot',
+                        'dark:bg-vscode-blue': view.mode === 'plot'
                     }]}
                     onclick={() => {
-                        if (plotSpec == '') {
-                          plotSpec = getDefaultPlotSpec(queryEngine.tableHeaders.slice(0,1), initialDataset.name + '_view', undefined);
-                          viewName = initialDataset.name + '_view';
+                        if (view.plotSpec == '') {
+                          view.plotSpec = getDefaultPlotSpec(data.tableHeaders.slice(0,1), data.activeDataset.name + '_view', undefined);
+                          view.viewName = data.activeDataset.name + '_view';
                         }
-                        viewMode = 'plot';
+                        view.mode = 'plot';
                       }}
                 >Plot</button>
             </div>
           </div>
         </h1>
-        <DatasetSelector {handleLoadUrl} {handleLoadExample} {handleLoadFile} isLoading={queryEngine.isLoadingQuery} />
+        <DatasetSelector 
+          handleLoadUrl={data.loadCustomUrl}
+          handleLoadExample={data.importDataset} 
+          handleLoadFile={data.loadFile}
+          isLoading={data.isLoadingQuery} />
       </div>
       <p class="text-slate-600 dark:text-vscode-gray-200 mt-1">
         Edit code to transform the data. Click a cell for <code class="bg-slate-200 dark:bg-vscode-gray-400 px-1 rounded">filter</code>, or click headers to select columns.
@@ -256,32 +132,32 @@
     <div class="grow flex gap-2 min-h-0">
       <!-- Main Content -->
       <main class="grow flex flex-col min-h-0 min-w-0">
-        {#if viewMode === 'table'}
+        {#if view.mode === 'table'}
           <CollapsibleEditor>
             {#snippet top()}
-              <EditorPanel bind:queryString={queryEngine.queryString} sqlQuery={queryEngine.sqlQuery} />
+              <EditorPanel bind:queryString={data.queryString} sqlQuery={data.sqlQuery} />
             {/snippet}
             {#snippet bottom()}
-              {#if queryEngine.queryError}
+              {#if data.queryError}
               <div class="p-4 bg-red-100 text-red-800 h-4 flex items-center justify-center">
-                <strong>Query Error:</strong> {queryEngine.queryError}
+                <strong>Query Error:</strong> {data.queryError}
               </div>
               {/if}
               <DataTable
-                tableData={queryEngine.tableData}
-                bind:tableHeaders={queryEngine.tableHeaders}
-                isLoadingQuery={queryEngine.isLoadingQuery}
-                queryTime={queryEngine.queryTime}
+                tableData={data.tableData}
+                bind:tableHeaders={data.tableHeaders}
+                isLoadingQuery={data.isLoadingQuery}
+                queryTime={data.queryTime}
                 bind:scrollContainer={tableScrollContainer}
-                {items} queryString={queryEngine.queryString}
-                setQuery={queryEngine.setQuery}
-                tcount={queryEngine.tcount}
-                onscroll={queryEngine.handleScroll}
+                {items} queryString={data.queryString}
+                setQuery={data.setQuery}
+                tcount={data.tcount}
+                onscroll={data.handleScroll}
               />
             {/snippet}
           </CollapsibleEditor>
-        {:else if viewMode === 'plot'}
-            <PlotView bind:spec={plotSpec} {viewName} />
+        {:else if view.mode === 'plot'}
+            <PlotView bind:spec={view.plotSpec} viewName={view.viewName} />
         {/if}
       </main>
 

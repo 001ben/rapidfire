@@ -1,0 +1,21 @@
+name: Cleanup Old Releases
+
+on:
+  release:
+    types: [published] # Run this workflow only when a release is published
+
+jobs:
+  cleanup:
+    name: Cleanup Releases
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete older releases
+        uses: dev-drpr/delete-older-releases@v0.10.0
+        with:
+          # The number of latest releases to keep.
+          keep_latest: 5
+          # Also delete the git tag associated with the old release.
+          # Set to `false` if you want to keep the tags in your git history.
+          delete_tags: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,23 @@
+name: Auto Tag on Main Merge
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needed to push the new tag
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Bump version and push tag
+        uses: anothrNick/github-tag-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WITH_V: true # Prefixes the tag with 'v'
+          DEFAULT_BUMP: patch # Increments the patch version (e.g., 1.0.1 -> 1.0.2)

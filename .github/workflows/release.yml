@@ -1,0 +1,41 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*' # This workflow runs on tags like v1.0.0
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needed to create the release and upload assets
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        working-directory: ./sv_app
+        run: npm i
+
+      - name: Build application
+        working-directory: ./sv_app
+        run: npm run build
+
+      - name: Zip build artifact
+        run: zip -r build.zip sv_app/build
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build.zip
+          body: "Release for tag ${{ github.ref_name }}"
+          # This will create a draft release. Remove the line below to publish directly.
+          draft: true
