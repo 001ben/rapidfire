@@ -1,6 +1,7 @@
 name: Create Release
 
 on:
+  workflow_dispatch: # Allows manual triggering
   push:
     tags:
       - 'v*.*.*' # This workflow runs on tags like v1.0.0
