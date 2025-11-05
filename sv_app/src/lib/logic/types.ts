@@ -12,4 +12,10 @@ export interface Dataset {
   url: string;
   type: "csv" | "parquet";
 }
+
+export type ViewState = {
+  mode: 'table' | 'plot';
+  plotSpec: string;
+  viewName: string;
+};
   
