@@ -5,76 +5,32 @@
   import DataTable from "$lib/components/DataTable.svelte";
   import EditorPanel from "$lib/components/EditorPanel.svelte";
   import PlotView from "$lib/components/PlotView.svelte";
-  import { addCast, addSort } from '$lib/logic/actions';
-  import { getNotificationsContext } from 'svelte-notifications';
+
   import { getDefaultPlotSpec } from '$lib/logic/plots';
-  const { addNotification } = getNotificationsContext();
   import CollapsibleEditor from "$lib/components/CollapsibleEditor.svelte";
   import { useDataExplorer } from "$lib/logic/useDataExplorer.svelte";
-
-  import type { TableHeader } from '$lib/logic/types';
   import { onMount } from "svelte";
 
   import { ShortcutsManager } from '$lib/logic/shortcuts';
   import DatasetSelector from "$lib/components/DatasetSelector.svelte";
 
   const data = useDataExplorer();
-
   const view = $state({
     mode: 'table' as 'table' | 'plot',
     plotSpec: '',
     viewName: ''
   });
-
   const shortcutManager = new ShortcutsManager(data, view);
-  const shortcuts = shortcutManager.shortcuts;
-
-  // let editorHeight = $state(224); // Default height in pixels (h-56)
-
+  
+  onMount(async () => {
+    data.initialise();
+    shortcutManager.initialise();
+  });
+  
   let tableScrollContainer = $state<HTMLElement | undefined>(undefined);
   $effect(() => {
     data.setScrollContainer(tableScrollContainer);
   });
-
-  onMount(async () => {
-    data.initialise();
-  });
-
-  const items = [
-    {
-      label: "Cast",
-      children: [
-        { label: "to String", action: (header: TableHeader) => { addCast(data.queryString, data.setQuery, header.name, "VARCHAR"); } },
-        { label: "to Integer", action: (header: TableHeader) => { addCast(data.queryString, data.setQuery, header.name, "INTEGER"); } },
-        { label: "to Float", action: (header: TableHeader) => { addCast(data.queryString, data.setQuery, header.name, "FLOAT"); } },
-        { label: "to Decimal", action: (header: TableHeader) => { addCast(data.queryString, data.setQuery, header.name, "DECIMAL"); } },
-        { label: "to Date", action: (header: TableHeader) => { addCast(data.queryString, data.setQuery, header.name, "DATE"); } },
-      ],
-    },
-    {
-      label: "Sort",
-      children: [
-        { label: "Ascending", action: (header: TableHeader) => { addSort(data.queryString, data.setQuery, header.name, 'asc'); } },
-        { label: "Descending", action: (header: TableHeader) => { addSort(data.queryString, data.setQuery, header.name, 'desc'); } },
-      ],
-    },
-    {
-      label: "Copy Name", action: async (header: TableHeader) => {
-        if (!navigator.clipboard) return;
-        try {
-          await navigator.clipboard.writeText(header.name);
-          addNotification({
-            text: `Copied "${header.name}" to clipboard.`,
-            position: 'bottom-right',
-            type: "success",
-            removeAfter: 2000,
-          });
-        } catch (err) {
-          console.error("Failed to copy: ", err);
-        }
-      }
-    }
-  ];
 </script>
 
 {#if data.dbError}
@@ -149,7 +105,8 @@
                 isLoadingQuery={data.isLoadingQuery}
                 queryTime={data.queryTime}
                 bind:scrollContainer={tableScrollContainer}
-                {items} queryString={data.queryString}
+                items={shortcutManager.items}
+                queryString={data.queryString}
                 setQuery={data.setQuery}
                 tcount={data.tcount}
                 onscroll={data.handleScroll}
@@ -162,7 +119,7 @@
       </main>
 
       <!-- Shortcut Ribbon -->
-      <ShortcutRibbon {shortcuts} />
+      <ShortcutRibbon shortcuts={shortcutManager.shortcuts} />
     </div>
   </div>
 {/if}

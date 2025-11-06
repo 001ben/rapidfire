@@ -1,19 +1,61 @@
-import type { StateHistory } from "runed";
-import type { useDataExplorer } from "./useDataExplorer.svelte";
 import { addCount, addDistinct, addGroupBy, addSelect, addCast, addSort } from "$lib/logic/actions";
 import { getDefaultPlotSpec } from "./plots";
-import type { ViewState } from "./types";
-
-type DataExplorer = ReturnType<typeof useDataExplorer>;
+import { getNotificationsContext } from 'svelte-notifications';
+import type { DataExplorer, ViewState, TableHeader } from "./types";
+import type { addNotification } from 'svelte-notifications';
 
 export class ShortcutsManager {
 	#data: DataExplorer;
 	#view: ViewState;
+  #addNotification: addNotification | undefined;
 
 	constructor(dataExplorer: DataExplorer, viewState: ViewState) {
 		this.#data = dataExplorer;
 		this.#view = viewState;
 	}
+
+  initialise() {
+    this.#addNotification = getNotificationsContext().addNotification;
+  }
+
+  get items() {
+    return [
+      {
+        label: "Cast",
+        children: [
+          { label: "to String", action: this.#addCastFunction("STRING") },
+          { label: "to Integer", action: this.#addCastFunction("INTEGER") },
+          { label: "to Float", action: this.#addCastFunction("FLOAT") },
+          { label: "to Decimal", action: this.#addCastFunction("DECIMAL") },
+          { label: "to Date", action: this.#addCastFunction("DATE") },
+        ],
+      },
+      {
+        label: "Sort",
+        children: [
+          { label: "Ascending", action: this.#addSortFunction('asc') },
+          { label: "Descending", action: this.#addSortFunction('desc') },
+        ],
+      },
+      {
+        label: "Copy Name", action: async (header: TableHeader) => {
+          if (!navigator.clipboard) return;
+          try {
+            await navigator.clipboard.writeText(header.name);
+            if (!this.#addNotification) return;
+            this.#addNotification({
+              text: `Copied "${header.name}" to clipboard.`,
+              position: 'bottom-right',
+              type: "success",
+              removeAfter: 2000,
+            });
+          } catch (err) {
+            console.error("Failed to copy: ", err);
+          }
+        }
+      }
+    ];
+  }
 
 	get shortcuts() {
 		return [
@@ -65,4 +107,12 @@ export class ShortcutsManager {
 	#count = () => addCount(this.#data.queryString, this.#data.setQuery);
 
 	#logQuery = () => console.log(this.#data.queryString);
+
+  #addCastFunction(dataType: string) {
+    return (header: TableHeader) => addCast(this.#data.queryString, this.#data.setQuery, header.name, dataType);
+  }
+  
+  #addSortFunction(direction: 'asc' | 'desc') {
+    return (header: TableHeader) => addSort(this.#data.queryString, this.#data.setQuery, header.name, direction)
+  }
 }

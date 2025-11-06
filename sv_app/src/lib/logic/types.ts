@@ -1,3 +1,5 @@
+import type { useDataExplorer } from "./useDataExplorer.svelte";
+
 export interface TableHeader {
     index: number;
     name: string;
@@ -18,4 +20,5 @@ export type ViewState = {
   plotSpec: string;
   viewName: string;
 };
+export type DataExplorer = ReturnType<typeof useDataExplorer>;
   

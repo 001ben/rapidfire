@@ -19,28 +19,6 @@
     let plotContainer: HTMLElement;
     let plot_width = $state(0);
     let plot_height = $state(0);
-    let specEditorHeight = $state(192); // Default height in pixels (h-48)
-
-    let isResizing = $state(false);
-
-    function startResize(event: MouseEvent) {
-        event.preventDefault();
-        isResizing = true;
-        window.addEventListener('mousemove', doResize);
-        window.addEventListener('mouseup', stopResize);
-    }
-
-    function doResize(event: MouseEvent) {
-        if (!isResizing) return;
-        // Adjust height, with constraints for min/max size
-        specEditorHeight = Math.max(80, Math.min(600, specEditorHeight + event.movementY));
-    }
-
-    function stopResize() {
-        isResizing = false;
-        window.removeEventListener('mousemove', doResize);
-        window.removeEventListener('mouseup', stopResize);
-    }
 
     $effect(() => {
         if(!vgLoaded) return;
