@@ -19,6 +19,7 @@ export type ViewState = {
   mode: 'table' | 'plot';
   plotSpec: string;
   viewName: string;
+  isExpressionBuilderOpen: boolean;
 };
 export type DataExplorer = ReturnType<typeof useDataExplorer>;
   

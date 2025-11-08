@@ -211,15 +211,8 @@ export function useDataExplorer() {
           tcount = tableData._nrows;
         }
         
-        let fields = result?.schema?.fields as {name: string, type: {typeId: number}}[] | undefined;
-        if (offset === 0 && fields) {
-          tableHeaders = fields.map((field, index) => ({
-            index: index,
-            name: field.name,
-            type: getArrowTypeName(field.type.typeId),
-            selected: false,
-            isColorColumn: false,
-          }));
+        if (offset === 0) {
+          tableHeaders = extractTableHeaders(result)
         }
       } catch (e) {
         queryError = e instanceof Error ? e.message : String(e);
@@ -232,6 +225,25 @@ export function useDataExplorer() {
   });
 
   // === Core Logic: Paging and Setters (from useQueryEngine) ===
+  async function runTimedQuery(query: string) {
+    // TBD
+  }
+
+  function extractTableHeaders(result: any) {
+    let fields = result?.schema?.fields as {name: string, type: {typeId: number}}[] | undefined;
+    if (fields) {
+      return fields.map((field, index) => ({
+        index: index,
+        name: field.name,
+        type: getArrowTypeName(field.type.typeId),
+        selected: false,
+        isColorColumn: false,
+      }));
+    } else {
+      throw new Error("Was not able to extract fields from result schema")
+    }
+  }
+
   const handleScroll = debounce((event: Event) => {
     const target = event.target as HTMLElement;
     const isAtBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 200;
@@ -272,6 +284,10 @@ export function useDataExplorer() {
     return await db?.clear({clients: true, cache: true});
   }
 
+  async function getConn(){
+    return await db?.getConn();
+  }
+
   // === Public Interface ===
   return {
     // State
@@ -294,6 +310,7 @@ export function useDataExplorer() {
     get selectedColumns() { return selectedColumns; },
     get selectedColumnNames() { return selectedColumnNames; },
     get colorColumn() { return colorColumn; },
+    get db() { return db },
     
     // Methods
     initialise,
@@ -307,5 +324,8 @@ export function useDataExplorer() {
     queryHistory,
     rawExecSQL,
     clearVGCachedData,
+    getConn,
+    createQuery,
+    extractTableHeaders,
   };
 }

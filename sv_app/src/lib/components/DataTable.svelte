@@ -9,8 +9,6 @@ let {
     queryTime,
     scrollContainer = $bindable(),
     items,
-    queryString,
-    setQuery,
     tcount,
     ...restProps
 } = $props();
@@ -123,7 +121,7 @@ function getTextColorForType(type: string): string {
     }}
 />
 <div
-    id="table-container" class="flex flex-col flex-grow min-h-0 rounded-lg shadow-md border border-slate-300 bg-white dark:border-vscode-gray-300 dark:bg-vscode-background relative"
+    id="table-container" class="flex flex-col grow min-h-0 rounded-lg shadow-md border border-slate-300 bg-white dark:border-vscode-gray-300 dark:bg-vscode-background relative"
     {...restProps}
 >
     {#if tableData}

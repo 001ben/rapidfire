@@ -5,6 +5,7 @@
   import DataTable from "$lib/components/DataTable.svelte";
   import EditorPanel from "$lib/components/EditorPanel.svelte";
   import PlotView from "$lib/components/PlotView.svelte";
+  import ExpressionBuilderModal from "$lib/components/ExpressionBuilderModal.svelte";
 
   import { getDefaultPlotSpec } from '$lib/logic/plots';
   import CollapsibleEditor from "$lib/components/CollapsibleEditor.svelte";
@@ -13,12 +14,14 @@
 
   import { ShortcutsManager } from '$lib/logic/shortcuts';
   import DatasetSelector from "$lib/components/DatasetSelector.svelte";
+  import type {ViewState} from "$lib/logic/types"
 
   const data = useDataExplorer();
-  const view = $state({
+  const view = $state<ViewState>({
     mode: 'table' as 'table' | 'plot',
     plotSpec: '',
-    viewName: ''
+    viewName: '',
+    isExpressionBuilderOpen: false
   });
   const shortcutManager = new ShortcutsManager(data, view);
   
@@ -106,11 +109,15 @@
                 queryTime={data.queryTime}
                 bind:scrollContainer={tableScrollContainer}
                 items={shortcutManager.items}
-                queryString={data.queryString}
-                setQuery={data.setQuery}
                 tcount={data.tcount}
                 onscroll={data.handleScroll}
               />
+              <div class="absolute top-2 right-36">
+                <button 
+                  class="px-3 py-1 text-sm font-semibold rounded-md transition-colors bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600"
+                  onclick={() => view.isExpressionBuilderOpen = true}
+                >f(x) Add Column</button>
+              </div>
             {/snippet}
           </CollapsibleEditor>
         {:else if view.mode === 'plot'}
@@ -122,4 +129,11 @@
       <ShortcutRibbon shortcuts={shortcutManager.shortcuts} />
     </div>
   </div>
+
+  <ExpressionBuilderModal 
+    bind:show={view.isExpressionBuilderOpen}
+    onClose={() => view.isExpressionBuilderOpen = false}
+    {data}
+    initialiseColumn={() => data.tableHeaders[0]?.name}
+  />
 {/if}

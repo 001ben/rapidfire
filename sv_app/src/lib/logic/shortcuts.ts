@@ -67,7 +67,8 @@ export class ShortcutsManager {
 			{ key: 'z', label: 'undo', action: this.#undo },
 			{ key: 'Z', label: 'redo', action: this.#redo },
 			{ key: 'q', label: 'log query', action: this.#logQuery },
-			{ key: 'r', label: 'reset', action: this.#reset }
+			{ key: 'r', label: 'reset', action: this.#reset },
+			{ key: 'e', label: 'add expression', action: this.#addExpression },
 		];
 	}
 
@@ -107,6 +108,10 @@ export class ShortcutsManager {
 	#count = () => addCount(this.#data.queryString, this.#data.setQuery);
 
 	#logQuery = () => console.log(this.#data.queryString);
+
+  #addExpression = () => {
+    this.#view.isExpressionBuilderOpen = true;
+  }
 
   #addCastFunction(dataType: string) {
     return (header: TableHeader) => addCast(this.#data.queryString, this.#data.setQuery, header.name, dataType);

@@ -22,7 +22,7 @@
 
 <div
   id="editor-container"
-  class="relative flex flex-shrink-0 h-full rounded-lg shadow-md overflow-hidden border border-slate-300 dark:border-vscode-gray-300"
+  class="relative flex shrink-0 h-full rounded-lg shadow-md overflow-hidden border border-slate-300 dark:border-vscode-gray-300"
 >
   <button
     onclick={() => (showSqlEditor = !showSqlEditor)}
@@ -49,7 +49,7 @@
     />
   </div>
   {#if showSqlEditor}
-    <div class="h-full w-1/2 border-l border-slate-300 dark:border-vscode-gray-300 overflow-scroll border-l-4">
+    <div class="h-full w-1/2 border-slate-300 dark:border-vscode-gray-300 overflow-scroll border-l-4">
       <CodeMirror 
         class="w-full h-full bg-slate-50 dark:bg-vscode-background" 
         value={sqlQuery} 

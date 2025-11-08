@@ -67,8 +67,9 @@ export class DataManager {
     DataManager.creationPromise = (async () => {
       try {
         const { vg, aq } = await import_vg_aq();
-        vg.coordinator().databaseConnector(vg.wasmConnector());
-        const duckdb = await vg.coordinator().manager.db.getDuckDB();
+        const wasmConnector = vg.wasmConnector()
+        const duckdb = await wasmConnector.getDuckDB();
+        vg.coordinator().databaseConnector(wasmConnector);
 
         // Create the instance and store it
         const newInstance = new DataManager(vg, aq, duckdb);
@@ -119,6 +120,10 @@ export class DataManager {
         throw new Error(`Unsupported file type of URL: ${type}`);
       }
       return {name, url, type};
+  }
+
+  async getConn() {
+    return await this.duckdb.connect();
   }
 
   async rawQuery(query: string, send: boolean = false) {
